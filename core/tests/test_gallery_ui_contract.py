@@ -23,6 +23,35 @@ class GalleryUIContractTests(unittest.TestCase):
         self.assertIn('IntersectionObserver',gallery)
         self.assertIn('previewActive<3',gallery)
         self.assertIn('Preview unavailable',gallery)
+    def test_portrait_grid_rows_are_intrinsic_and_never_overlap(self):
+        css=(ROOT/'static/studio.css').read_text()
+        # A fixed row height smaller than a 2:3 XL card used to cause stacking
+        # (XL=228px, portrait=342px, old row=146px).
+        self.assertNotIn('grid-auto-rows:146px',css)
+        self.assertNotIn('height:146px',css)
+        self.assertIn('grid-auto-rows:max-content',css)
+        self.assertIn('aspect-ratio:var(--card-ratio,2 / 3)',css)
+        self.assertIn('overflow-y:auto',css)
+    def test_thumbnail_is_transparent_portrait_and_restores_renderer(self):
+        viewer=(ROOT/'static/viewer.mjs').read_text()
+        self.assertIn('alpha:true',viewer)
+        self.assertIn('const width=360,height=540',viewer)
+        self.assertIn('scene.background=null',viewer)
+        self.assertIn('floor.visible=false',viewer)
+        self.assertIn('grid.visible=false',viewer)
+        self.assertIn('setClearColor(0x000000,0)',viewer)
+        self.assertIn('setFromObject(model)',viewer)
+        self.assertIn('finally{',viewer)
+        for restored in ('scene.background=previousBackground','floor.visible=previousFloor',
+                         'grid.visible=previousGrid','renderer.setSize(previousSize.x,previousSize.y,false)'):
+            self.assertIn(restored,viewer)
+    def test_collector_is_downloadable_without_automatic_injection(self):
+        backend=(ROOT/'flask_app.py').read_text()
+        markup=(ROOT/'templates/index.html').read_text()
+        collector=(ROOT/'mixamo_motion_collector.js').read_text()
+        self.assertIn("@app.get('/collector.js')",backend)
+        self.assertIn('href="/collector.js"',markup)
+        self.assertIn('Mixamo Motion Collector',collector)
     def test_gallery_sizes_aspects_and_overlays_and_log_copy(self):
         markup=(ROOT/'templates/index.html').read_text()
         js=(ROOT/'static/studio.js').read_text()

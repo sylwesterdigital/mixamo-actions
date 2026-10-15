@@ -1,3 +1,12 @@
+## v1.2.5 — 2026-10-15
+
+- Prevent overlapping gallery cards: use content-sized CSS grid rows for every XL/M/S size and 1:1, 2:3 or 3:2 aspect ratio, independently of the panel's draggable height.
+- Keep the model image within each card, with title and action icons overlaid instead of consuming separate rows or obscuring adjacent cards.
+- Capture newly saved/refreshed local model thumbnails as 360×540 portrait WebP images with a transparent background and no stage floor or grid.
+- Frame the avatar's current pose independently of the viewport, with approximately 15% tighter framing; restore live viewer camera, backdrop, floor, grid and renderer state after capture.
+- Document the existing DevTools-only Mixamo Motion Collector and the Studio's Collector download link; do not inject collector code into active Playwright download tabs.
+- Preserve local and Rantlist galleries, pipeline assets, model exports, authentication, GitHub publishing and static-only isolated Ubuntu deployment unchanged.
+
 ## v1.2.4 — 2026-10-15
 
 - Fix the Flask Rantlist publish regression test that accidentally contacted the live private gallery without a test session, causing an expected HTTP 401 and aborting v1.2.3 installation.

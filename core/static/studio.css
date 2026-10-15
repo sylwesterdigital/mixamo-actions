@@ -63,8 +63,8 @@
 .library-resize-handle span{display:block;width:74px;height:4px;background:#7895be;border-radius:5px;box-shadow:0 0 0 2px #101c2e}
 .library-resize-handle:hover span,.library-resize-handle:focus-visible span{background:#c0d5ff}
 .library-dock.collapsed .library-resize-handle{display:none}
-.library-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(153px,1fr));grid-auto-rows:146px;align-content:start;align-items:stretch;overflow-x:hidden;overflow-y:auto;gap:10px;scrollbar-width:thin}
-.model-card{min-width:0;min-height:0;max-width:100%;height:146px}
+.library-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(153px,1fr));grid-auto-rows:max-content;align-content:start;align-items:stretch;overflow-x:hidden;overflow-y:auto;gap:10px;scrollbar-width:thin}
+.model-card{min-width:0;min-height:0;max-width:100%;height:auto}
 .model-thumb{height:96px;position:relative}
 .model-thumb img{width:100%;height:100%;object-fit:contain}
 .model-thumb .thumb-empty{font-size:11px;color:#8298b5;padding:9px;text-align:center}
@@ -95,7 +95,7 @@
 .gallery-control-group{display:flex;gap:1px;border:1px solid #3a4d68;border-radius:5px;padding:2px;background:#10192a}
 .library-head .gallery-control-group button{padding:2px 5px;min-width:21px;font:700 10px ui-monospace,monospace;letter-spacing:0;color:#8ea9ca;border-radius:3px}
 .library-head .gallery-control-group button.selected{background:#4a6fa8;color:#fff}
-.library-cards{grid-template-columns:repeat(auto-fill,minmax(min(var(--card-width,164px),100%),1fr));grid-auto-rows:auto;align-items:start;gap:10px}
+.library-cards{grid-template-columns:repeat(auto-fill,minmax(min(var(--card-width,164px),100%),1fr));grid-auto-rows:max-content;align-items:start;align-content:start;gap:10px}
 .model-card{height:auto;aspect-ratio:var(--card-ratio,2 / 3);min-height:0;isolation:isolate;background:#18283e}
 .model-card-main{display:block;position:absolute;inset:0;overflow:hidden}
 .model-thumb{position:absolute;inset:0;height:100%;width:100%;display:grid;place-items:center;background:radial-gradient(circle at 50% 52%,#354865,#18243a 75%);overflow:hidden}
@@ -113,3 +113,28 @@
 .console-header .console-tools button{font-size:11px;border:1px solid #3e5777;border-radius:4px;background:#1a2a41;padding:4px 7px;letter-spacing:0}
 .console-header .console-tools button:last-child{font-size:18px;padding:1px 8px}
 .console-drawer{height:min(380px,55vh);width:min(740px,calc(100% - 28px));z-index:12}
+
+/* v1.2.5: each grid row derives its height from the selected card aspect ratio.
+   The gallery handle changes only the scrollport height, never card geometry. */
+.library-cards{
+  grid-auto-flow:row;
+  grid-auto-rows:max-content;
+  align-content:start;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.library-cards > .model-card{
+  position:relative;
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:auto;
+  aspect-ratio:var(--card-ratio,2 / 3);
+  min-height:0;
+  overflow:hidden;
+}
+.library-cards .model-card-main,.library-cards .model-thumb{position:absolute;inset:0;width:100%;height:100%;}
+.library-cards .model-card-label{position:absolute;top:0;left:0;right:0;bottom:auto;z-index:2;}
+.library-cards .model-card-actions{position:absolute;bottom:6px;right:6px;z-index:3;}
+.library-cards .model-thumb img{position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;object-position:center;}

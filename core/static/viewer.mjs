@@ -14,7 +14,7 @@ const appearance = {background:'#202b3c',floor:'#354052',floorVisible:true,grid:
   keyIntensity:2.3,fillIntensity:1.2,ambientIntensity:1.25,rimIntensity:1.6,
   shadows:true,exposure:1.05,autoRotate:false,frame:()=>frameModel()};
 scene.background=new THREE.Color(appearance.background);
-const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+const renderer = new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -194,16 +194,60 @@ const animate=()=>{
 };animate();
 function captureStage(){
   if(!model)return null;
-  // Capture the *Three.js canvas*, excluding Studio UI overlays.
-  renderer.render(scene,camera);
-  const source=renderer.domElement;
-  const canvas=document.createElement('canvas');canvas.width=360;canvas.height=220;
-  const ctx=canvas.getContext('2d');if(!ctx)return null;
-  const scale=Math.min(canvas.width/source.width,canvas.height/source.height);
-  const drawW=Math.round(source.width*scale),drawH=Math.round(source.height*scale);
-  ctx.fillStyle=appearance.background;ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(source,Math.round((canvas.width-drawW)/2),Math.round((canvas.height-drawH)/2),drawW,drawH);
-  return new Promise(resolve=>canvas.toBlob(resolve,'image/webp',0.78));
+  // An isolated 2:3 avatar portrait rather than a screenshot of the viewport.
+  // Temporarily hide the environment and frame the current animated pose;
+  // restore ALL viewer/renderer state, even if rendering fails.
+  const width=360,height=540;
+  const previousSize=renderer.getSize(new THREE.Vector2());
+  const previousBackground=scene.background;
+  const previousFloor=floor.visible,previousGrid=grid.visible;
+  const previousClear=renderer.getClearColor(new THREE.Color()).clone();
+  const previousAlpha=renderer.getClearAlpha();
+  const captureCanvas=document.createElement('canvas');
+  captureCanvas.width=width;captureCanvas.height=height;
+  const ctx=captureCanvas.getContext('2d',{alpha:true});
+  if(!ctx)return null;
+  try{
+    model.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(model);
+    if(bounds.isEmpty())return null;
+    const center=bounds.getCenter(new THREE.Vector3());
+    const dimensions=bounds.getSize(new THREE.Vector3());
+    const portraitCamera=camera.clone();
+    portraitCamera.aspect=width/height;
+    portraitCamera.near=.01;
+    portraitCamera.far=2000;
+    portraitCamera.updateProjectionMatrix();
+    const vfov=THREE.MathUtils.degToRad(portraitCamera.fov);
+    const hfov=2*Math.atan(Math.tan(vfov/2)*portraitCamera.aspect);
+    // 1.16 is a comfortable frame margin; compared with the previous viewport
+    // capture it makes the subject around 10–20% larger, without clipping limbs.
+    const fit=Math.max(dimensions.y/(2*Math.tan(vfov/2)),dimensions.x/(2*Math.tan(hfov/2)),.1);
+    const distance=fit*1.16+dimensions.z*.5;
+    const direction=camera.position.clone().sub(controls.target).normalize();
+    if(direction.lengthSq()<.001)direction.set(0,.1,1).normalize();
+    portraitCamera.position.copy(center).addScaledVector(direction,distance);
+    portraitCamera.lookAt(center);
+    scene.background=null;
+    floor.visible=false;
+    grid.visible=false;
+    renderer.setClearColor(0x000000,0);
+    renderer.setSize(width,height,false);
+    renderer.clear(true,true,true);
+    renderer.render(scene,portraitCamera);
+    // Draw synchronously before restoring the WebGL canvas.
+    ctx.clearRect(0,0,width,height);
+    ctx.drawImage(renderer.domElement,0,0,width,height);
+  }finally{
+    scene.background=previousBackground;
+    floor.visible=previousFloor;
+    grid.visible=previousGrid;
+    renderer.setClearColor(previousClear,previousAlpha);
+    renderer.setSize(previousSize.x,previousSize.y,false);
+    renderer.render(scene,camera);
+  }
+  // WebP preserves the alpha channel and is accepted by local and Stage APIs.
+  return new Promise(resolve=>captureCanvas.toBlob(resolve,'image/webp',.87));
 }
 window.MixamoViewer={load,play,pause,playPause,stop,next,prev:previous,frame:frameModel,
   captureStage,getClips:()=>clips.map(c=>c.name)};

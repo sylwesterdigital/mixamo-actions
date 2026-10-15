@@ -2,6 +2,17 @@
 
 Local Mixamo / Playwright / Blender animation pipeline with one combined GLB, Three.js motion preview and named motion presets.
 
+## Motion list collector (manual Mixamo tab)
+
+The collector is `core/mixamo_motion_collector.js` (also served as a downloadable script
+by `http://127.0.0.1:5055/collector.js`, and linked **Collector ↗** in Studio).
+Open the authenticated Mixamo **Animations** tab in Brave, open DevTools → Console,
+and paste the contents of this script. The draggable collector records selected motions
+with exact motion IDs and exports `animations.json`. Import this JSON using Studio's
+**Animation collection → Import JSON**, or use a saved preset. The downloader uses the
+resulting list. **The pipeline does not automatically inject the collector** into its
+Playwright-controlled tab; collect motions manually outside a running download job.
+
 ## Repository layout
 
 | Path | Responsibility |
@@ -23,7 +34,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.2.4.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.2.5.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -31,13 +42,13 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.2.4.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.2.5.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
 For systems where the **v1.0.0 update failed** (its old tests and installer are still present), apply the updater fix once from the already-saved versioned release ZIP. Then start the normal watcher:
 
 ```zsh
 cd /Users/smielniczuk/Documents/works/mixamo-actions
-unzip -o updates/mixamo-actions-v1.2.4.zip ops/install_release.py mixamo-studio-watch.sh
+unzip -o updates/mixamo-actions-v1.2.5.zip ops/install_release.py mixamo-studio-watch.sh
 chmod +x mixamo-studio-watch.sh
 ./mixamo-studio-watch.sh --once
 ./mixamo-studio-watch.sh
@@ -115,7 +126,7 @@ The existing server site mapping is left untouched. Deployment copies only five 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.2.4.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.2.5.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -153,7 +164,7 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.2.4.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.2.5.zip ops/install_release.py`,
 and restart the watcher from the repository root.
 
 ### Rantlist Stage integration (v1.2.0)
