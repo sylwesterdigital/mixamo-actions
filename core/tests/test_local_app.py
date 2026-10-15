@@ -68,8 +68,24 @@ class FlaskLocalTests(unittest.TestCase):
                 self.assertEqual(result.status_code,200)
                 self.assertEqual(publish.call_args.kwargs['glb'][:4],b'glTF')
                 self.assertEqual(publish.call_args.kwargs['name'],'Test dancer')
+                changed=self.client.post('/api/rantlist/publish/'+uid,json={'kind':'model','name':'blad3'},headers=self.headers)
+                self.assertEqual(changed.status_code,200)
+                self.assertEqual(publish.call_args.kwargs['name'],'blad3')
+                self.assertEqual(publish.call_args.kwargs['kind'],'model')
+                invalid=self.client.post('/api/rantlist/publish/'+uid,json={'name':''},headers=self.headers)
+                self.assertEqual(invalid.status_code,400)
+                self.assertEqual(publish.call_count,2)
         finally:
             with self.mod.LIBRARY_LOCK:self.mod._save_library(original)
+
+    def test_remote_thumbnail_keeps_actual_mime_type_and_rejects_html(self):
+        with patch.object(self.mod.RANTLIST_BRIDGE,'asset',return_value=(b'\xff\xd8\xff'+b'x'*64,'image/jpeg')):
+            image=self.client.get('/api/rantlist/assets/'+'a'*32+'/thumbnail',headers=self.headers)
+            self.assertEqual(image.status_code,200)
+            self.assertEqual(image.mimetype,'image/jpeg')
+        with patch.object(self.mod.RANTLIST_BRIDGE,'asset',return_value=(b'<html>error</html>','text/html')):
+            image=self.client.get('/api/rantlist/assets/'+'a'*32+'/thumbnail',headers=self.headers)
+            self.assertEqual(image.status_code,502)
 
     def test_post_requires_token(self):
         response = self.client.post('/api/jobs', headers={'Host': '127.0.0.1:5055'})

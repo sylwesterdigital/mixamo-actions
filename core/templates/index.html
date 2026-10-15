@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.1</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.2</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -56,6 +56,7 @@
     <div id="viewerNotice" class="viewer-notice hidden" role="status"></div>
     <div class="viewer-bottom"><div class="transport"><button type="button" id="prevClip" title="Previous animation">⏮</button><button type="button" id="playPause" title="Play / pause">▶</button><button type="button" id="stopClip" title="Stop">◼</button><button type="button" id="nextClip" title="Next animation">⏭</button><span class="transport-rule"></span><span id="nowPlaying">No active clip</span></div><div class="bottom-right"><span id="viewerState">SCENE READY</span><button id="toggleConsole" class="console-toggle" type="button">▤ Logs</button></div></div>
     <section id="libraryDock" class="library-dock" aria-label="Model library">
+      <div id="libraryResizeHandle" class="library-resize-handle" role="separator" aria-label="Resize model gallery" aria-orientation="horizontal" tabindex="0" title="Drag upward to see more model rows; use arrow keys to resize"><span></span></div>
       <div class="library-head">
         <button id="libraryToggle" type="button" title="Collapse / expand model library" aria-expanded="true"><span id="libraryChevron">▾</span> MODEL LIBRARY <span id="libraryCount">0</span></button>
         <div class="library-head-actions">
@@ -71,6 +72,26 @@
       <div id="libraryCards" class="library-cards"><p class="library-empty">Your finished models will appear here.</p></div>
       <div id="rantlistCards" class="library-cards hidden"><p class="library-empty">Import a Rantlist profile JSON to browse your private Stage gallery.</p></div>
     </section>
+    <div id="rantlistPublishOverlay" class="rantlist-publish-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="rantlistPublishTitle">
+      <div class="rantlist-publish-dialog">
+        <div class="rantlist-publish-eyebrow">RANTLIST STAGE · PRIVATE GALLERY</div>
+        <h2 id="rantlistPublishTitle">Publish GLB to Rantlist</h2>
+        <p id="rantlistPublishSource" class="rantlist-publish-source"></p>
+        <label class="field" for="rantlistPublishName">Model name
+          <input id="rantlistPublishName" type="text" maxlength="80" autocomplete="off" required>
+        </label>
+        <fieldset id="rantlistPublishKinds" class="rantlist-publish-kinds">
+          <legend>Save to your Rantlist Stage library</legend>
+          <label><input type="radio" name="rantlistPublishKind" value="avatar" checked> Avatar</label>
+          <label><input type="radio" name="rantlistPublishKind" value="model"> Model</label>
+        </fieldset>
+        <div id="rantlistPublishStatus" class="rantlist-publish-status" role="status" aria-live="polite"></div>
+        <div class="rantlist-publish-actions">
+          <button id="rantlistPublishCancel" type="button" class="btn subtle">Close</button>
+          <button id="rantlistPublishSubmit" type="button" class="btn primary">Upload GLB</button>
+        </div>
+      </div>
+    </div>
     <div id="consoleDrawer" class="console-drawer hidden"><div class="console-header">PIPELINE LOG <button type="button" id="closeConsole">×</button></div><pre id="consoleText">No job activity yet.</pre></div>
     <div id="guiMount"></div>
   </main>

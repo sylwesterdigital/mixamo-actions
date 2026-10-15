@@ -5,7 +5,56 @@
 const $ = id => document.getElementById(id);
 const localToken = JSON.parse($('bootstrap').textContent).token;
 const ui = {connected:false,nickname:null,tab:'local',models:[],selected:null};
-const thumbs = new Map();
+// Keep only rendered/visible previews in flight to protect the shared Rantlist backend.
+const thumbs=new Map(), failedThumbs=new Set(), previewQueue=[];
+const previewInFlight=new Set();
+let previewActive=0;
+const previewObserver=('IntersectionObserver' in window)?new IntersectionObserver(entries=>{
+  for(const entry of entries){if(!entry.isIntersecting)continue;
+    previewObserver.unobserve(entry.target);
+    enqueueThumb(entry.target.dataset.thumbId,entry.target);
+  }
+},{root:$('rantlistCards'),rootMargin:'130px',threshold:0.01}):null;
+function thumbFallback(img,message){
+  const holder=img.parentNode;if(!holder)return;
+  img.remove();const text=document.createElement('span');text.className='thumb-empty';text.textContent=message;holder.append(text);
+}
+function runPreviewQueue(){
+  while(previewActive<3&&previewQueue.length){
+    const next=previewQueue.shift();
+    if(!next.img.isConnected)continue;
+    const {id,img}=next;
+    const cached=thumbs.get(id);
+    if(cached){img.src=cached.url;continue;}
+    if(failedThumbs.has(id)){thumbFallback(img,'Preview unavailable');continue;}
+    if(previewInFlight.has(id)){previewQueue.push(next);break;}
+    previewActive++;previewInFlight.add(id);
+    (async()=>{
+      try{
+        const blob=await blobFor(id,'thumbnail');
+        if(blob.size<32||!['image/webp','image/png','image/jpeg','image/gif'].includes(blob.type))throw new Error('Not an image');
+        // Never accept HTML error pages or broken responses as image thumbnails.
+        const url=URL.createObjectURL(blob);thumbs.set(id,{url});
+        if(img.isConnected)img.src=url;
+      }catch(error){failedThumbs.add(id);if(img.isConnected)thumbFallback(img,'Preview unavailable');}
+      finally{previewActive--;previewInFlight.delete(id);runPreviewQueue();}
+    })();
+  }
+}
+function enqueueThumb(id,img){
+  const cached=thumbs.get(id);
+  if(cached){img.src=cached.url;return;}
+  previewQueue.push({id,img});runPreviewQueue();
+}
+function markThumbnail(item,img){
+  img.alt='';img.dataset.thumbId=item.id;img.decoding='async';
+  img.onerror=()=>{
+    if(thumbs.has(item.id)){URL.revokeObjectURL(thumbs.get(item.id).url);thumbs.delete(item.id);}
+    failedThumbs.add(item.id);thumbFallback(img,'Preview unavailable');
+  };
+  if(previewObserver)previewObserver.observe(img);
+  else enqueueThumb(item.id,img);
+}
 async function api(path,options={}) {
   const response=await fetch('/api/rantlist/'+path,{...options,headers:{'X-Local-Token':localToken,...(options.headers||{})}});
   if(!response.ok){let reason=`HTTP ${response.status}`;try{reason=(await response.json()).error||reason;}catch{};throw new Error(reason);}
@@ -46,13 +95,13 @@ $('rantlistProfileFile').addEventListener('change',async event=>{
 });
 $('galleryLocal').addEventListener('click',()=>setTab('local'));
 $('galleryRantlist').addEventListener('click',()=>setTab('rantlist'));
-$('rantlistRefresh').addEventListener('click',()=>refresh().catch(e=>announce(e.message,true)));
+$('rantlistRefresh').addEventListener('click',()=>{failedThumbs.clear();refresh().catch(e=>announce(e.message,true));});
 $('rantlistDisconnect').addEventListener('click',async()=>{
   try{await api('disconnect',{method:'POST'});}catch{}
   ui.connected=false;ui.nickname=null;ui.models=[];ui.selected=null;clearThumbs();updateConnection();render();
   announce('Disconnected from Rantlist. Your remote library has not been modified.');
 });
-function clearThumbs(){for(const url of thumbs.values())URL.revokeObjectURL(url);thumbs.clear();}
+function clearThumbs(){for(const item of thumbs.values())URL.revokeObjectURL(item.url);thumbs.clear();failedThumbs.clear();previewQueue.length=0;previewObserver?.disconnect();}
 async function refresh(){
   if(!ui.connected){render();return;}
   try{
@@ -65,13 +114,6 @@ async function refresh(){
   }
 }
 async function blobFor(id,kind){return (await api(`assets/${encodeURIComponent(id)}/${kind}`)).blob();}
-async function thumbnail(id,img){
-  try{
-    let url=thumbs.get(id);
-    if(!url){url=URL.createObjectURL(await blobFor(id,'thumbnail'));thumbs.set(id,url);}
-    if(img.isConnected)img.src=url;
-  }catch{if(img.isConnected)img.alt='No remote thumbnail';}
-}
 async function loadRemote(item){
   try{
     if(!window.MixamoViewer)throw new Error('Three.js viewer is not ready.');
@@ -91,17 +133,17 @@ async function download(item){
 }
 async function erase(item){
   if(!confirm(`Delete “${item.name}” from your REAL Rantlist Stage gallery?\nThis removes the remote asset for your account and may break Stage references. Your local GLB is unaffected.`))return;
-  try{await api('assets/'+item.id,{method:'DELETE'});const old=thumbs.get(item.id);if(old)URL.revokeObjectURL(old);thumbs.delete(item.id);await refresh();announce('Removed from Rantlist Stage.');}
+  try{await api('assets/'+item.id,{method:'DELETE'});const old=thumbs.get(item.id);if(old)URL.revokeObjectURL(old.url);thumbs.delete(item.id);failedThumbs.delete(item.id);await refresh();announce('Removed from Rantlist Stage.');}
   catch(error){announce('Cannot delete Rantlist model: '+error.message,true);}
 }
 function render(){
-  const host=$('rantlistCards');host.replaceChildren();
+  const host=$('rantlistCards');previewObserver?.disconnect();previewQueue.length=0;host.replaceChildren();
   if(!ui.connected||!ui.models.length){const empty=document.createElement('p');empty.className='library-empty';empty.textContent=ui.connected?'No GLB avatars or models in your Rantlist Stage gallery. Use “↑ R” on any local card to upload one.':'Import your Rantlist profile JSON to connect and browse your private Stage gallery.';host.append(empty);return;}
   for(const item of ui.models){
     const card=document.createElement('article');card.className='model-card';if(ui.selected===item.id)card.classList.add('selected');
     const open=document.createElement('button');open.className='model-card-main';open.type='button';open.title='Load on Mixamo stage';
     const shot=document.createElement('div');shot.className='model-thumb';shot.textContent='◇';
-    if(item.thumbnail){const image=document.createElement('img');image.alt='Rantlist preview for '+item.name;shot.textContent='';shot.append(image);void thumbnail(item.id,image);}
+    if(item.thumbnail){const image=document.createElement('img');shot.textContent='';shot.append(image);markThumbnail(item,image);}
     const name=document.createElement('div');name.className='model-card-label';
     const heading=document.createElement('strong');heading.textContent=item.name;
     const secondary=document.createElement('small');secondary.textContent=`${item.kind==='avatar'?'Stage avatar':'Stage model'} · ${(item.size/1048576).toFixed(1)} MiB`;
@@ -112,20 +154,65 @@ function render(){
     actions.append(dl,del);card.append(open,actions);host.append(card);
   }
 }
-async function publish(localId){
-  if(!ui.connected){setTab('rantlist');announce('Import a Rantlist profile JSON first, then publish again.',true);return;}
-  const choice=prompt('Publish to Rantlist Stage gallery as “avatar” (character) or “model” (scene asset)?','avatar');
-  if(choice===null)return;
-  const kind=choice.trim().toLowerCase();
-  if(kind!=='avatar'&&kind!=='model'){announce('Choose avatar or model.',true);return;}
-  if(!confirm(`Upload this GLB to the authenticated Rantlist ${kind} gallery?\nRantlist applies its own file limits and profile storage quota.`))return;
-  try{
-    announce('Uploading GLB to Rantlist Stage…');
-    const result=await(await api('publish/'+encodeURIComponent(localId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind})})).json();
-    await refresh();setTab('rantlist');
-    announce(`Published “${result.name}” to your Rantlist ${kind} gallery${result.thumbnailSaved?' with stage preview':' (preview could not be saved)'}.`);
-  }catch(error){announce('Rantlist publish failed: '+error.message,true);}
+// Real publish dialog: never use a native text prompt for an enumerated choice.
+const dialog=$('rantlistPublishOverlay'),submit=$('rantlistPublishSubmit'),cancel=$('rantlistPublishCancel');
+const status=$('rantlistPublishStatus'),nameInput=$('rantlistPublishName');
+let selectedLocalId=null,uploading=false,publishFinished=false;
+function publishStatus(message,state=''){
+  status.textContent=message;status.className='rantlist-publish-status '+state;
 }
+function setUploading(value){
+  uploading=value;submit.disabled=value;nameInput.disabled=value;
+  cancel.disabled=value;
+  for(const radio of document.querySelectorAll('input[name="rantlistPublishKind"]'))radio.disabled=value;
+}
+function closePublish(){if(uploading)return;dialog.classList.add('hidden');selectedLocalId=null;}
+cancel.addEventListener('click',closePublish);
+dialog.addEventListener('click',e=>{if(e.target===dialog)closePublish();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!dialog.classList.contains('hidden'))closePublish();});
+function publish(localId,localName){
+  if(!ui.connected){setTab('rantlist');announce('Connect your Rantlist profile before publishing a local model.',true);return;}
+  if(uploading)return;
+  selectedLocalId=localId;publishFinished=false;
+  const proposed=String(localName||'Mixamo model').trim().slice(0,80)||'Mixamo model';
+  nameInput.value=proposed;
+  $('rantlistPublishSource').textContent=`Source: ${proposed} · Existing GLB in your local Model Library`;
+  document.querySelector('input[name="rantlistPublishKind"][value="avatar"]').checked=true;
+  publishStatus('Ready to upload. The GLB will be added to your private Rantlist Stage library.');
+  submit.textContent='Upload GLB';cancel.textContent='Cancel';
+  dialog.classList.remove('hidden');nameInput.focus();nameInput.select();
+}
+submit.addEventListener('click',async()=>{
+  if(uploading||!selectedLocalId)return;
+  const name=nameInput.value.trim(),kind=document.querySelector('input[name="rantlistPublishKind"]:checked')?.value;
+  if(!name||name.length>80){publishStatus('Enter a name from 1 to 80 characters.','failed');return;}
+  if(!['avatar','model'].includes(kind)){publishStatus('Select Avatar or Model.','failed');return;}
+  if(publishFinished){closePublish();return;}
+  const localId=selectedLocalId;
+  setUploading(true);let seconds=0;
+  publishStatus('Uploading your GLB to Rantlist Stage…\nWaiting for confirmation from the Rantlist server.','busy');
+  const ticker=setInterval(()=>{
+    seconds++;
+    publishStatus(`Uploading and verifying “${name}” (${seconds}s elapsed)…\nPlease keep this dialog open. No percentage is available from the remote API.`,'busy');
+  },1000);
+  try{
+    const result=await(await api('publish/'+encodeURIComponent(localId),{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name})
+    })).json();
+    publishFinished=true;
+    const thumbnailText=result.thumbnailSaved?'Stage screenshot saved.':
+      `GLB saved, but no stage screenshot was saved${result.thumbnailError?': '+result.thumbnailError:'.'}`;
+    publishStatus(`Published successfully: “${result.name}” to your private Rantlist ${result.kind} gallery.\n${thumbnailText}`,'succeeded');
+    submit.textContent='Done';cancel.textContent='Close';
+    failedThumbs.clear();
+    try{await refresh();}catch(error){publishStatus(`GLB published as “${result.name}”.\nGallery refresh failed: ${error.message}. Use ↻ to retry.`, 'succeeded');}
+    setTab('rantlist');
+    announce(`Published “${result.name}” to Rantlist Stage.`);
+  }catch(error){
+    publishStatus('Upload failed: '+error.message+'\nNo success was reported. Check your Rantlist gallery before retrying to avoid duplicates.','failed');
+    announce('Rantlist publish failed: '+error.message,true);
+  }finally{clearInterval(ticker);setUploading(false);}
+});
 window.RantlistStudio={publish};
 void api('status').then(r=>r.json()).then(session=>{
   ui.connected=!!session.connected;ui.nickname=session.nickname;updateConnection();

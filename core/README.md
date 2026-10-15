@@ -94,3 +94,7 @@ From the Model Library dock, choose **Rantlist Stage** → **Connect profile** a
 #### Rantlist compatibility (v1.2.1)
 
 Before profile login, the local bridge reads the public `https://rantlist.me/version` endpoint and passes current UI/protocol/hash values in the Rantlist WebSocket connection URL, preventing Rantlist r630 from misidentifying Mixamo as a legacy client. This request sends no profile credential and neither changes nor deploys Rantlist server files.
+
+### Model gallery reliability and publishing (v1.2.2)
+
+The bottom gallery can be resized by dragging its top grip (or focusing it and using the up/down arrows). Cards reflow into scrollable rows. Remote thumbnails load only when visible, up to three simultaneous requests, preserve their original image MIME types, and display a placeholder on failure rather than broken alt text. Local `↑ R` opens a modal prefilled with the saved model name, offers Avatar/Model radio buttons, shows an indeterminate upload status with elapsed time, and keeps explicit success/failure results until dismissed. The remote API does not provide byte-level upload progress; no fake percentages are shown. Model publication is never rolled back if an optional screenshot fails; its error is reported separately.

@@ -190,6 +190,34 @@ function setLibraryExpanded(value){
   try{localStorage.setItem('mixamo-library-expanded',JSON.stringify(libraryExpanded));}catch{}
 }
 $('libraryToggle').onclick=()=>setLibraryExpanded(!libraryExpanded);
+// Only changes the local scene viewport. No server-side configuration or model data.
+const libraryHandle=$('libraryResizeHandle');
+const savedHeight=Number(localStorage.getItem('mixamo-library-height'));
+function applyLibraryHeight(height,persist=false){
+  const host=$('viewport');
+  const max=Math.max(166,host.clientHeight-175);
+  const value=Math.round(Math.min(max,Math.max(166,height)));
+  host.style.setProperty('--library-height',value+'px');
+  libraryHandle.setAttribute('aria-valuenow',String(value));
+  if(persist)try{localStorage.setItem('mixamo-library-height',String(value));}catch{}
+}
+applyLibraryHeight(Number.isFinite(savedHeight)&&savedHeight>=166?savedHeight:204);
+window.addEventListener('resize',()=>applyLibraryHeight(parseFloat(getComputedStyle($('viewport')).getPropertyValue('--library-height'))||204));
+libraryHandle.addEventListener('pointerdown',e=>{
+  if(e.button!==0||!libraryExpanded)return;
+  e.preventDefault();libraryHandle.setPointerCapture(e.pointerId);
+  const starting=parseFloat(getComputedStyle($('viewport')).getPropertyValue('--library-height'))||204;
+  const origin=e.clientY;
+  function moving(event){if(event.pointerId===e.pointerId)applyLibraryHeight(starting+origin-event.clientY);}
+  function finishing(event){if(event.pointerId!==e.pointerId)return;libraryHandle.removeEventListener('pointermove',moving);libraryHandle.removeEventListener('pointerup',finishing);libraryHandle.removeEventListener('pointercancel',finishing);applyLibraryHeight(parseFloat(getComputedStyle($('viewport')).getPropertyValue('--library-height'))||204,true);}
+  libraryHandle.addEventListener('pointermove',moving);libraryHandle.addEventListener('pointerup',finishing);libraryHandle.addEventListener('pointercancel',finishing);
+});
+libraryHandle.addEventListener('keydown',e=>{
+  if(!['ArrowUp','ArrowDown','Home'].includes(e.key))return;
+  e.preventDefault();setLibraryExpanded(true);
+  const now=parseFloat(getComputedStyle($('viewport')).getPropertyValue('--library-height'))||204;
+  applyLibraryHeight(e.key==='Home'?204:now+(e.key==='ArrowUp'?48:-48),true);
+});
 try{setLibraryExpanded(JSON.parse(localStorage.getItem('mixamo-library-expanded')||'true'));}
 catch{setLibraryExpanded(true);}
 function renderLibrary(){
@@ -218,7 +246,7 @@ function renderLibrary(){
       catch(e){showViewerNotice(e.message,true);}
     };
     const publish=document.createElement('button');publish.type='button';publish.title='Publish this GLB to your private Rantlist Stage gallery';publish.textContent='↑ R';publish.setAttribute('aria-label','Publish '+model.name+' to Rantlist');
-    publish.onclick=()=>window.RantlistStudio?.publish(model.id);
+    publish.onclick=()=>window.RantlistStudio?.publish(model.id,model.name);
     tools.append(publish,download,remove);card.append(open,tools);host.append(card);
   }
 }

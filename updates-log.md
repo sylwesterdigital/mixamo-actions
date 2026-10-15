@@ -1,3 +1,12 @@
+## v1.2.2 — 2026-10-15
+
+- Repair Rantlist thumbnail display: preserve the remote JPG/PNG/WebP MIME type, bound requests to three visible thumbnails, and show a clean fallback instead of broken images.
+- Make the bottom Model Library vertically resizable by dragging its top handle, with multiple scrollable rows and keyboard resizing support.
+- Replace the confusing avatar/model text prompt with a dedicated publish dialog; prefill the filename from the saved GLB name and offer explicit Avatar and Model choices.
+- Show upload-in-progress status, elapsed time without fabricated percent-complete, and persistent confirmed success or detailed failure for every Rantlist upload.
+- Report a separate Stage-preview upload failure without incorrectly marking a successfully uploaded GLB as failed.
+- Preserve local models, private Rantlist identity isolation, Git/SSH publishing, and the static-only Ubuntu deployment boundary; no Rantlist server or Nginx changes.
+
 ## v1.2.1 — 2026-10-15
 
 - Fix Rantlist profile login rejected as a legacy chat page: read current Rantlist UI/protocol/hash metadata from its public, same-origin `/version` endpoint before opening the Stage WebSocket.

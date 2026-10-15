@@ -193,6 +193,28 @@ class RantlistContractTests(unittest.TestCase):
         self.assertTrue(result['thumbnailSaved']);self.assertIn('kind=avatar',calls[0][0]);self.assertIn('ext=glb',calls[0][0]);
         self.assertEqual(calls[0][1]['data'][:4],b'glTF');self.assertEqual(calls[1][1]['media_type'],'image/webp')
 
+    def test_thumbnail_media_type_follows_remote_response(self):
+        bridge=RantlistBridge()
+        bridge._catalog=lambda:{'items':[{'id':'a'*32,'kind':'avatar','ext':'glb',
+            'thumbnailUrl':'/stage-private/view/'+'a'*32+'/thumb.jpeg?k='+'b'*64+'&v=123'}]}
+        requests=[]
+        bridge._http=lambda path,**kw:(requests.append(path) or (b'\xff\xd8\xff'+b'x'*36,'image/jpeg'))
+        image,mime=bridge.asset('a'*32,'thumbnail')
+        self.assertEqual(mime,'image/jpeg')
+        self.assertTrue(image.startswith(b'\xff\xd8\xff'))
+        self.assertTrue(requests[0].endswith('&v=123'))
+
+    def test_thumbnail_failure_is_reported_without_losing_uploaded_glb(self):
+        bridge=RantlistBridge()
+        def backend(path,**kw):
+            if '/thumbnail?' in path:raise RantlistError('Preview quota exceeded',413)
+            return {'item':{'id':'a'*32,'name':'blad3','updatedAt':123}}
+        bridge._json=backend
+        result=bridge.publish(glb=b'glTF'+b'a'*100,kind='avatar',name='blad3',thumbnail=b'RIFF'+b'0'*4+b'WEBP'+b'0'*60)
+        self.assertEqual(result['name'],'blad3')
+        self.assertFalse(result['thumbnailSaved'])
+        self.assertEqual(result['thumbnailError'],'Preview quota exceeded')
+
     def test_upload_rejects_oversized_and_unexpected_kinds(self):
         bridge=RantlistBridge()
         with self.assertRaisesRegex(RantlistError,'20 MiB'):

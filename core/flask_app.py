@@ -633,8 +633,14 @@ def rantlist_assets():
 def rantlist_asset(asset_id, format):
     if format not in ('glb','download','thumbnail'):
         abort(404)
-    payload, _mime = RANTLIST_BRIDGE.asset(asset_id, 'thumbnail' if format=='thumbnail' else 'glb')
-    mimetype = 'image/webp' if format=='thumbnail' else 'model/gltf-binary'
+    payload, remote_mime = RANTLIST_BRIDGE.asset(asset_id, 'thumbnail' if format=='thumbnail' else 'glb')
+    if format == 'thumbnail':
+        # Rantlist thumbnails may be JPEG/PNG/WebP; do not relabel every blob as WebP.
+        mimetype = remote_mime.split(';', 1)[0].strip().lower()
+        if mimetype not in ('image/webp', 'image/png', 'image/jpeg', 'image/gif'):
+            return respond_error('Rantlist did not return a supported image preview.', 502)
+    else:
+        mimetype = 'model/gltf-binary'
     return send_file(BytesIO(payload), mimetype=mimetype,
                      as_attachment=format=='download',
                      download_name=f'rantlist-{asset_id}.glb' if format=='download' else None,
@@ -647,7 +653,11 @@ def rantlist_publish(library_id):
 
     Never accept arbitrary filenames, server destinations, or arbitrary upload URLs.
     """
-    kind = (request.get_json(silent=True) or {}).get('kind','avatar')
+    data = request.get_json(silent=True) or {}
+    kind = data.get('kind','avatar')
+    name = data.get('name')
+    if name is not None and (not isinstance(name, str) or not 1 <= len(name.strip()) <= 80):
+        return respond_error('Enter a model name (1–80 characters).', 400)
     if not re.fullmatch(r'[a-f0-9]{24,32}', library_id):
         abort(404)
     with LIBRARY_LOCK:
@@ -663,7 +673,7 @@ def rantlist_publish(library_id):
     glb = candidate.read_bytes()
     thumb = LIBRARY_THUMBS / (library_id+'.webp')
     thumbnail = thumb.read_bytes() if thumb.is_file() and thumb.stat().st_size <= 192 * 1024 else None
-    return jsonify(RANTLIST_BRIDGE.publish(glb=glb, name=entry.get('name','Mixamo model'), kind=kind, thumbnail=thumbnail))
+    return jsonify(RANTLIST_BRIDGE.publish(glb=glb, name=(name.strip() if name is not None else entry.get('name','Mixamo model')), kind=kind, thumbnail=thumbnail))
 
 
 @app.delete('/api/rantlist/assets/<asset_id>')

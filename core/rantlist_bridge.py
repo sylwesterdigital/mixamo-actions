@@ -344,14 +344,17 @@ class RantlistBridge:
         if not isinstance(item,dict) or not ASSET_ID.fullmatch(str(item.get('id',''))):
             raise RantlistError('Rantlist upload response was incomplete; check your gallery before retrying.', 502)
         preview_saved = False
+        preview_error = None
         if thumbnail and len(thumbnail) <= MAX_PREVIEW and thumbnail[:4] == b'RIFF' and thumbnail[8:12] == b'WEBP':
             try:
                 p = f"/stage-private/api/assets/{item['id']}/thumbnail?" + urlencode({'v': str(item['updatedAt']), 'size':str(len(thumbnail))})
                 self._json(p, method='POST', data=thumbnail, media_type='image/webp')
                 preview_saved = True
-            except RantlistError:
-                pass  # Successful model upload must never be rolled back for thumbnail failure.
-        return {'id':item['id'], 'name':item.get('name',name), 'kind':kind, 'thumbnailSaved':preview_saved}
+            except RantlistError as exc:
+                preview_error = str(exc)[:160]  # GLB remains published; report thumbnail problem.
+        elif thumbnail:
+            preview_error = 'Preview exceeds 192 KiB or is not a WebP image.'
+        return {'id':item['id'], 'name':item.get('name',name), 'kind':kind, 'thumbnailSaved':preview_saved, 'thumbnailError':preview_error}
 
     def delete(self, asset_id):
         if not ASSET_ID.fullmatch(str(asset_id)): raise RantlistError('Invalid Rantlist model ID.')
