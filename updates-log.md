@@ -1,3 +1,11 @@
+## v1.2.1 — 2026-10-15
+
+- Fix Rantlist profile login rejected as a legacy chat page: read current Rantlist UI/protocol/hash metadata from its public, same-origin `/version` endpoint before opening the Stage WebSocket.
+- Include `uiVersion`, `protocolVersion`, `uiHash`, and `reloadSupport` on the WebSocket handshake URL, as required by the existing Rantlist r630 server.
+- If Rantlist redeploys between version lookup and connection, refresh and retry the handshake once; never retry unrelated account/authentication rejections.
+- Reject malformed, redirected, oversized or unavailable Rantlist version responses without sending a profile credential.
+- Retain the existing private Stage gallery, local model library, Flask token isolation, SSH/Git updater and strictly scoped static homepage deployment. No Ubuntu or Rantlist backend changes.
+
 # Mixamo Studio — update log
 
 ## v1.2.0 — Rantlist Stage gallery integration (2026-10-15)

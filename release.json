@@ -1,23 +1,20 @@
 {
   "name": "mixamo-actions",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "date": "2026-10-15",
   "changes": [
-    "Import a portable `rantlist-profile` JSON in Mixamo Studio to connect to the same Rantlist account using Rantlist r630's existing WebSocket sign-in and 40-minute owner-bound Stage gallery capability.",
-    "Add Local / Rantlist Stage tabs to the collapsible bottom library; browse owner-private remote avatar and model GLBs, preview thumbnails, load animated GLBs in Three.js, and download remote files.",
-    "Add `↑ R` to each local GLB card to publish it to a chosen Rantlist Stage Avatar or Model library, then upload its captured WebP stage thumbnail when it meets Rantlist's preview limit.",
-    "Use the existing owner-scoped `/stage-private/api/assets` Rantlist API, not server filesystem access; honor Rantlist's 20 MiB-per-GLB limit, 60-item library cap, and profile media quota.",
-    "Keep exported profile JSON, account identity, WebSocket capability and private Rantlist asset URLs out of persistent local storage and all release/deployment files; protect all localhost Rantlist gateway requests with the Studio session token.",
-    "Confine outbound gallery traffic to `wss://rantlist.me/ws` and `https://rantlist.me` with strict remote media path checks; do not modify or deploy any Rantlist server, Nginx, or Ubuntu service configuration.",
-    "Warn explicitly that Rantlist r630 allows only one active session per nickname: connecting via Mixamo may sign out an open Rantlist tab and refresh saved profile fields from the exported JSON.",
-    "Add offline contract tests for Rantlist's portable-profile format, ownership capability, media URL allowlist, gallery listing, GLB upload and WebP thumbnail; keep local Flask installation and rollback tests intact."
+    "Fix Rantlist profile login rejected as a legacy chat page: read current Rantlist UI/protocol/hash metadata from its public, same-origin `/version` endpoint before opening the Stage WebSocket.",
+    "Include `uiVersion`, `protocolVersion`, `uiHash`, and `reloadSupport` on the WebSocket handshake URL, as required by the existing Rantlist r630 server.",
+    "If Rantlist redeploys between version lookup and connection, refresh and retry the handshake once; never retry unrelated account/authentication rejections.",
+    "Reject malformed, redirected, oversized or unavailable Rantlist version responses without sending a profile credential.",
+    "Retain the existing private Stage gallery, local model library, Flask token isolation, SSH/Git updater and strictly scoped static homepage deployment. No Ubuntu or Rantlist backend changes."
   ],
   "files": {
     ".gitignore": "f4f8dff5c1232ce3f1951b82c622df9b7e4e31c1141176ad433d54d2e1c279cc",
-    "README.md": "961e1da0c160be431e9c57b1aee261b81c4b638bf34633fdbb24493918c9237b",
-    "VERSION": "1e5b51cde515396a9fa762909cf8ca6584ccc564b325d2eebeea76175fe95c4d",
+    "README.md": "dc16c5d90f5b643f40f2e208eb0f6b41ab71a0557398cda6a0713ef8e012978b",
+    "VERSION": "6cf4e084b47f33c9b02ef79279d157833868f8f70514169a768be353ee328fea",
     "core/.gitignore": "bb92ce161fd5e533679722219b747e4e41e7c629968731feb1abf32ea6d203c9",
-    "core/README.md": "872bed5d1dc89d3866a0b084300516c93405cc8bdc7d496754702658da3805b9",
+    "core/README.md": "91a67635f2783e634af30166d70f8d71c59deb33c58c3a36c641b9a91ae4eb2e",
     "core/animations.json": "6bf64b1024811ab5d46daf958616192550e86ee2d31030ebeb00b1935708ff4b",
     "core/blender_build.py": "439796363bdd5f2cee523ce2376f1e18b4eeed6414ec7d2eec669e0fbc5387d5",
     "core/brave_session.sh": "e7f5a0e1265a018028b3e6148da2f1cdd0fc9bca0c07f45da1d0cb41653df0fd",
@@ -25,7 +22,7 @@
     "core/mixamo_browser.py": "f62473c42bde70c3ce534000a83713cbb41e402162a40cf24d1cc95ccc6d948b",
     "core/mixamo_motion_collector.js": "29a7695f8941c9015cbbaea68a666f50b25ab1998c1814a2d1091cc10b90d09a",
     "core/mixamo_pipeline.py": "1727758beef25a0c0a0bc123a57241cfd5d0b922f4d371d540a5dcfc44104800",
-    "core/rantlist_bridge.py": "ff081cfcae77426b0f2a726d664ceb3be9017745ba668afd7110b366b18b9f3e",
+    "core/rantlist_bridge.py": "d2b3fec1785d868d85dd0878629a1617438eb75afe26dc4829d2c2da20b4d9f2",
     "core/requirements.txt": "daee56325c0d234ab28672092f8789ee1164c2cf5030b64778651255d442559f",
     "core/start.sh": "4b34a380c7155b83ebde8ea4397dc64154de1172e19d37140665007fb47de21c",
     "core/static/rantlist.js": "15b2010d99f707680ff8107d79f8c2ff40f8856b4c57f3de67e150844cd45e70",
@@ -33,9 +30,9 @@
     "core/static/studio.css": "061311b37856d2c92c679ad56afe1cfbfcb609931ff931aeb5bb5f5334fea529",
     "core/static/studio.js": "f179d7d702cb431d9d0a053cd6d86234d952106c5f2e22507f85b474ae80dc3a",
     "core/static/viewer.mjs": "2091ed458611a73b2a9ab0a95329d54c288912b6c8f9c4e22321cb7576484c2c",
-    "core/templates/index.html": "1214357d30a42af15733e3228ac5dd3c442f7b0ff38dc5a3fc6e46eaa672c31b",
+    "core/templates/index.html": "fb54824824fb6f7c00d3c4de17a9f00cb3d6ebe2cbcb37a2f42af6f6c19838d1",
     "core/tests/test_local_app.py": "c971fcf3836f209579128898f7d74a2381510ad103c9684501d4b145b538f111",
-    "core/tests/test_rantlist_bridge.py": "efda8a8d6f24bbb986d3269b334a41693c20f96bf4cf4bafd8bc42c7d64caf7d",
+    "core/tests/test_rantlist_bridge.py": "e3c3585b0591a9a5dd812d71fc811a89867f965d1904a08c44c39b5473c9ec78",
     "mixamo-studio-watch.sh": "9da3670d22921b95ef32889dffe2ef7102b86afc62c262f67408697973964855",
     "mixamo-watch.env.example": "1bbd490f13128667d80de69afd6305d89efe268352517fcbe4a9582854406417",
     "ops/build_release.py": "11f9ee4082033c812f03373977d9b58e0aed383ce2d8e46ef14025f8420b0452",
@@ -48,11 +45,11 @@
     "ops/test_release.py": "5a6cae2bd2fa0b01baeb371a6b2f8bda44d6e964688d0bfc248f706af9de5011",
     "site/.htaccess": "d12cb219d07e577a7fd0da974b3d34571f5f4b03def39c8fe09bfa7c9f142342",
     "site/favicon.svg": "5022a287f1f81074ac007403fcb542240f49fa0b34d0ce8f93d49ce9f0f0dc0b",
-    "site/index.html": "acf8d2c5602d3a764d46d161af730cb9d038cc351166b5f830d2a915f7d68dca",
+    "site/index.html": "539f527c3c0d498bb7d0540c580d264635bcb054177056de9853154080139ac4",
     "site/release.js": "bfaa0653cbfa59062c1467a4a24645ec2edfe0fbe19429eeaed084eb236e6d9a",
-    "site/release.json": "5e1f57c0660cd788166041de8ebc6f9ffb4a7f688fb8baa2ab04d3770419efe7",
+    "site/release.json": "7fc14bd9b7f4150421cbdcb3ea26ec40feb0818bee05ead3e7d20b74d1425436",
     "site/styles.css": "801454b8de4a150ae131e99e5f228d8a44facff39fa8bd44eb22e52233cb0ea0",
     "tests/test_release_integrity.py": "959dd927c7111eb4dccbc92f0a63c7f2d246b6885fe9dbd857edc38926c15e67",
-    "updates-log.md": "21b0ec28ad175d2b378b2b107e9e0ae7c6648ed9ea5768b0dfa899f62f461133"
+    "updates-log.md": "cecd9a8072ff224043d0cdd0770fd87794fb865719091e85670720902d6a8d00"
   }
 }

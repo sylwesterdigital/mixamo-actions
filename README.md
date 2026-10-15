@@ -23,7 +23,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.1.3.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.2.1.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -31,13 +31,13 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.1.3.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.2.1.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
 For systems where the **v1.0.0 update failed** (its old tests and installer are still present), apply the updater fix once from the already-saved versioned release ZIP. Then start the normal watcher:
 
 ```zsh
 cd /Users/smielniczuk/Documents/works/mixamo-actions
-unzip -o updates/mixamo-actions-v1.1.3.zip ops/install_release.py mixamo-studio-watch.sh
+unzip -o updates/mixamo-actions-v1.2.1.zip ops/install_release.py mixamo-studio-watch.sh
 chmod +x mixamo-studio-watch.sh
 ./mixamo-studio-watch.sh --once
 ./mixamo-studio-watch.sh
@@ -115,7 +115,7 @@ The existing server site mapping is left untouched. Deployment copies only five 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.1.3.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.2.1.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -153,7 +153,7 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.1.3.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.2.1.zip ops/install_release.py`,
 and restart the watcher from the repository root.
 
 ### Rantlist Stage integration (v1.2.0)
@@ -165,3 +165,7 @@ Mixamo Studio runs locally at `http://127.0.0.1:5055`. In the collapsible **Mode
 After connection, the **Rantlist Stage** gallery shows your private Avatar and Model GLBs. Load a remote model into Three.js, download it, or delete the remote asset (after confirmation). In the **Local** gallery, click **↑ R** on a model card and choose `avatar` or `model` to publish the combined GLB to the respective Rantlist Stage library. Thumbnail upload is attempted if the captured local WebP is 192 KiB or smaller. Rantlist limits each GLB to **20 MiB**, uses a shared Stage gallery limit of **60 items**, and applies the account's ordinary upload quota. Oversize GLBs need optimizing before publishing. New Rantlist assets remain **owner-private**; they are available to others in Stage only when used as an explicitly shared/selected Stage asset, not as a public asset directory.
 
 The integration reuses the already deployed Rantlist r630 API, `wss://rantlist.me/ws` and `https://rantlist.me/stage-private/api/assets`. Its WebSocket capability is kept in local Flask process memory and expires when the session disconnects. It opens the Rantlist socket without a cross-origin browser WebSocket, since Rantlist r630 rejects foreign WebSocket origins. The local gateway is protected by the ephemeral `X-Local-Token`. A Flask restart requires importing the profile again. **No Rantlist source, Ubuntu files, Nginx, services, or static deploy destination are changed.**
+
+### Rantlist connection compatibility fix (v1.2.1)
+
+Rantlist r630 requires WebSocket connection query parameters matching its current server-served browser UI. Mixamo Studio now checks the public `https://rantlist.me/version` JSON immediately before connecting and includes `uiVersion`, `protocolVersion`, `uiHash` and `reloadSupport=1` in the `wss://rantlist.me/ws` handshake URL. A deployment race retries once; an unrelated sign-in denial is never retried. The imported portable profile is not stored or sent during version discovery. No Rantlist server edits, SSH operations, or Nginx changes are required for this fix.

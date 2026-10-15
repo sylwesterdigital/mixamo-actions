@@ -110,53 +110,111 @@ class RantlistBridge:
                     'expiresAt': self.expiry if valid else None,
                     'error': self.error}
 
-    def connect(self, profile: dict, *, socket_factory=None):
+    def _public_versions(self) -> dict:
+        # Rantlist r630 requires browser UI + protocol versions on the *WebSocket
+        # upgrade URL* (not in hello). Source: server.js parseClientVersion() and
+        # enforceClientVersion(); the same public /version endpoint is used by its UI.
+        req = Request(RANTLIST_HTTPS + '/version', headers={
+            'Accept': 'application/json', 'Cache-Control': 'no-store'})
+        try:
+            with self.opener.open(req, timeout=10) as response:
+                data = response.read(4097)
+        except RantlistError:
+            raise
+        except (HTTPError, URLError, OSError, TimeoutError) as exc:
+            raise RantlistError('Cannot read Rantlist public UI version; connection was not attempted.', 502) from exc
+        if len(data) > 4096:
+            raise RantlistError('Rantlist version response is unexpectedly large.', 502)
+        try:
+            versions = json.loads(data)
+        except (TypeError, ValueError) as exc:
+            raise RantlistError('Rantlist returned invalid public UI version JSON.', 502) from exc
+        if not isinstance(versions, dict):
+            raise RantlistError('Rantlist returned invalid public UI version information.', 502)
+        protocol = versions.get('protocolVersion')
+        ui_version = versions.get('uiVersion')
+        ui_hash = versions.get('uiHash')
+        if (type(protocol) is not int or not 1 <= protocol <= 999999
+                or not isinstance(ui_version, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', ui_version)
+                or (ui_hash is not None and (not isinstance(ui_hash, str)
+                     or not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', ui_hash)))):
+            raise RantlistError('Rantlist public UI version fields are invalid.', 502)
+        return {'uiVersion': ui_version, 'protocolVersion': protocol, 'uiHash': ui_hash}
+
+    @staticmethod
+    def _versioned_ws_url(versions: dict) -> str:
+        # Only controlled, validated fields from https://rantlist.me/version.
+        params = {'uiVersion': versions['uiVersion'],
+                  'protocolVersion': str(versions['protocolVersion']),
+                  'reloadSupport': '1'}
+        if versions.get('uiHash'):
+            params['uiHash'] = versions['uiHash']
+        return RANTLIST_WS + '?' + urlencode(params)
+
+    def connect(self, profile: dict, *, socket_factory=None, version_fetcher=None):
         self.close()
+        ws = None
         try:
             if socket_factory is None:
                 import websocket  # websocket-client, not websockets
-                socket_factory = lambda: websocket.create_connection(RANTLIST_WS, timeout=15, suppress_origin=True)
-            ws = socket_factory()
-            # Register exactly as Rantlist's normal browser does. We never store
-            # profile JSON; identity credentials only live in this Python process.
-            ws.send(json.dumps({'type': 'hello', **profile}, separators=(',', ':')))
-            got_hello = False
-            deadline = time.monotonic() + 22
-            while time.monotonic() < deadline:
-                try:
-                    packet = json.loads(ws.recv())
-                except (ValueError, TypeError):
+                socket_factory = lambda url: websocket.create_connection(url, timeout=15, suppress_origin=True)
+            if version_fetcher is None:
+                version_fetcher = self._public_versions
+            # A deployment between /version and /ws can reject the first attempt.
+            # Refresh the public version *once* without looping on auth failures.
+            for attempt in range(2):
+                versions = version_fetcher()
+                ws = socket_factory(self._versioned_ws_url(versions))
+                # The identity credential is sent only after the secure WS upgrade.
+                ws.send(json.dumps({'type': 'hello', **profile}, separators=(',', ':')))
+                got_hello = False
+                version_changed = False
+                deadline = time.monotonic() + 22
+                while time.monotonic() < deadline:
+                    try:
+                        packet = json.loads(ws.recv())
+                    except (ValueError, TypeError):
+                        continue
+                    if not isinstance(packet, dict):
+                        continue
+                    if packet.get('type') == 'hello.ok':
+                        actual = packet.get('user') or {}
+                        if actual.get('identityId') != profile['identityId']:
+                            raise RantlistError('Rantlist returned a different identity.', 403)
+                        got_hello = True
+                        ws.send('{"type":"stage.asset.authorize"}')
+                    elif packet.get('type') == 'stage.asset.access' and got_hello:
+                        token = packet.get('token')
+                        if not isinstance(token, str) or not re.fullmatch('[a-fA-F0-9]{64}', token):
+                            raise RantlistError('Rantlist returned an invalid Stage access capability.', 502)
+                        if packet.get('identityId') != profile['identityId']:
+                            raise RantlistError('Stage access belongs to a different identity.', 403)
+                        expiry = float(packet.get('expiresAt') or 0)
+                        if expiry < time.time()*1000 + 30_000:
+                            raise RantlistError('Rantlist Stage access expired immediately.', 502)
+                        with self.lock:
+                            self.ws, self.token, self.expiry = ws, token, expiry
+                            self.nickname, self.identity_id = profile['nickname'], profile['identityId']
+                            generation = self.session_generation
+                        ws.settimeout(8)
+                        threading.Thread(target=self._reader, args=(ws, generation), daemon=True).start()
+                        return self.status()
+                    elif packet.get('type') == 'error':
+                        if packet.get('code') == 'client_update_required':
+                            version_changed = True
+                            break
+                        raise RantlistError('Rantlist refused sign-in: ' + str(packet.get('message') or packet.get('code') or 'Access denied')[:180], 403)
+                if version_changed and attempt == 0:
+                    ws.close()
+                    ws = None
                     continue
-                if packet.get('type') == 'hello.ok':
-                    actual = packet.get('user') or {}
-                    if actual.get('identityId') != profile['identityId']:
-                        raise RantlistError('Rantlist returned a different identity.', 403)
-                    got_hello = True
-                    ws.send('{"type":"stage.asset.authorize"}')
-                elif packet.get('type') == 'stage.asset.access' and got_hello:
-                    token = packet.get('token')
-                    if not isinstance(token, str) or not re.fullmatch('[a-fA-F0-9]{64}', token):
-                        raise RantlistError('Rantlist returned an invalid Stage access capability.', 502)
-                    if packet.get('identityId') != profile['identityId']:
-                        raise RantlistError('Stage access belongs to a different identity.', 403)
-                    expiry = float(packet.get('expiresAt') or 0)
-                    if expiry < time.time()*1000 + 30_000:
-                        raise RantlistError('Rantlist Stage access expired immediately.', 502)
-                    with self.lock:
-                        self.ws, self.token, self.expiry = ws, token, expiry
-                        self.nickname, self.identity_id = profile['nickname'], profile['identityId']
-                        generation = self.session_generation
-                    ws.settimeout(8)
-                    threading.Thread(target=self._reader, args=(ws, generation), daemon=True).start()
-                    return self.status()
-                elif packet.get('type') == 'error':
-                    raise RantlistError('Rantlist refused sign-in: ' + str(packet.get('message') or packet.get('code') or 'Access denied')[:180], 403)
-            raise RantlistError('Timed out waiting for Rantlist Stage gallery authorization.', 504)
+                if version_changed:
+                    raise RantlistError('Rantlist UI versions changed during login. Retry profile import.', 502)
+                raise RantlistError('Timed out waiting for Rantlist Stage gallery authorization.', 504)
         except Exception as exc:
-            try:
-                ws.close()
-            except (Exception, UnboundLocalError):
-                pass
+            if ws is not None:
+                try: ws.close()
+                except Exception: pass
             if isinstance(exc, RantlistError):
                 raise
             raise RantlistError('Could not establish a secure Rantlist session: ' + type(exc).__name__, 502) from exc

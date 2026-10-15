@@ -90,3 +90,7 @@ All `mixamo_pipeline.py`, `mixamo_browser.py`, `blender_build.py`, `mixamo_motio
 ### Rantlist Stage (v1.2.0)
 
 From the Model Library dock, choose **Rantlist Stage** → **Connect profile** and select your Rantlist v1 portable-profile JSON. The file is not saved to disk. Connecting may replace another open session of the same nickname and save imported profile metadata on Rantlist, so use a recent backup. Local GLB card **↑ R** publishes via `/stage-private/api/assets` to the private Avatar or Model gallery, limited by the Rantlist account storage quota and 20 MiB per GLB. Remote gallery cards can preview/load/download/delete their GLBs. Browser–localhost gateway operations use the Studio session token, and only fixed `rantlist.me` HTTPS/WSS destinations are permitted.
+
+#### Rantlist compatibility (v1.2.1)
+
+Before profile login, the local bridge reads the public `https://rantlist.me/version` endpoint and passes current UI/protocol/hash values in the Rantlist WebSocket connection URL, preventing Rantlist r630 from misidentifying Mixamo as a legacy client. This request sends no profile credential and neither changes nor deploys Rantlist server files.
