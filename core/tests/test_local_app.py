@@ -91,6 +91,55 @@ class FlaskLocalTests(unittest.TestCase):
         finally:
             with self.mod.LIBRARY_LOCK:self.mod._save_library(original)
 
+    def test_resume_preserves_original_upload_and_rejects_changes(self):
+        from resume_state import digest
+        from collections import deque
+        character = Path(self.temp.name) / 'resume-upload.zip'
+        character.write_bytes(b'a saved upload')
+        preset = Path(self.temp.name) / 'resume-anims.json'
+        preset.write_text(json.dumps({'animations':[{'search':'swim'}]}))
+        out = character.parent / 'resume-upload-exports'
+        command = [sys.executable, '-u', str(self.mod.ROOT / 'mixamo_pipeline.py'),
+                   '--character', str(character), '--animations', str(preset)]
+        # Fake only thread scheduling: never launch a live Mixamo or Blender job.
+        record = dict(schema=1, command=command, character=str(character),
+                      output=str(out), preset=str(preset), characterSha256=digest(character),
+                      presetSha256=digest(preset), animations=1, status='failed',
+                      id='previous-job', started='yesterday', finished='today')
+        with self.mod.STATE_LOCK:
+            prior = self.mod.STATE['job']
+            self.mod.STATE['job'] = None
+        previous = self.mod.read_last_job()
+        try:
+            self.mod.LAST_JOB_FILE.write_text(json.dumps(record))
+            recovered = self.client.get('/api/status', headers=self.headers).json['job']
+            self.assertTrue(recovered['resumable'])
+            self.assertEqual(recovered['character'], str(character))
+            no_token = self.client.post('/api/jobs/resume', headers={'Host':'127.0.0.1:5055'})
+            self.assertEqual(no_token.status_code, 403)
+            with patch.object(self.mod, 'Thread') as thread:
+                resumed = self.client.post('/api/jobs/resume', headers=self.headers)
+                self.assertEqual(resumed.status_code, 200, resumed.data)
+                self.assertTrue(thread.called)
+                args = thread.call_args.kwargs['args']
+                self.assertIn(str(character), args[1])
+                self.assertIn(str(preset), args[1])
+                self.assertNotIn('--skip-download', args[1])
+                self.assertEqual(resumed.json['job']['character'], str(character))
+            with self.mod.STATE_LOCK:
+                self.mod.STATE['job'] = None
+            self.mod.LAST_JOB_FILE.write_text(json.dumps(record))
+            preset.write_text('changed preset')
+            denied = self.client.post('/api/jobs/resume', headers=self.headers)
+            self.assertEqual(denied.status_code, 409)
+        finally:
+            with self.mod.STATE_LOCK:
+                self.mod.STATE['job'] = prior
+            if previous:
+                self.mod.LAST_JOB_FILE.write_text(json.dumps(previous))
+            else:
+                self.mod.LAST_JOB_FILE.unlink(missing_ok=True)
+
     def test_rantlist_publish_quota_preflight_never_uploads(self):
         # A full account must fail locally without touching the upload API.
         import hashlib

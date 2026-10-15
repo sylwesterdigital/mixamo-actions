@@ -34,7 +34,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.2.5.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.2.7.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -42,17 +42,16 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.2.5.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.2.7.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
-For systems where the **v1.0.0 update failed** (its old tests and installer are still present), apply the updater fix once from the already-saved versioned release ZIP. Then start the normal watcher:
+If your watcher is already running, simply save the new versioned ZIP in `updates/`; no command is needed. If the watcher is not running, start **continuous monitoring** once:
 
 ```zsh
 cd /Users/smielniczuk/Documents/works/mixamo-actions
-unzip -o updates/mixamo-actions-v1.2.5.zip ops/install_release.py mixamo-studio-watch.sh
-chmod +x mixamo-studio-watch.sh
-./mixamo-studio-watch.sh --once
 ./mixamo-studio-watch.sh
 ```
+
+Leave that terminal open. Do **not** pass `--once`: that flag performs one check and exits.
 
 The updater verifies manifest hashes, tests the code, installs dependencies in `core/.venv`, backs up overwritten files, and restarts the managed Flask app on port 5055. It preserves local browser profiles, credentials, uploads, exported GLBs, and the Git directory.
 
@@ -63,7 +62,7 @@ lsof -nP -iTCP:5055 -sTCP:LISTEN
 ps -p PID -o command=   # replace PID with the actual listener PID
 ```
 
-Stop only the old instance after verifying its command and retry `./mixamo-studio-watch.sh --once`. The permanent watcher automatically notices later higher-version ZIPs in `updates/`.
+Stop only the old instance after verifying its command and let the continuous watcher retry. The permanent watcher automatically notices later higher-version ZIPs in `updates/`.
 
 Open the local Studio at http://127.0.0.1:5055. The browser tab reports new versions after its local server restarts.
 
@@ -126,7 +125,7 @@ The existing server site mapping is left untouched. Deployment copies only five 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.2.5.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.2.7.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -164,7 +163,7 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.2.5.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.2.7.zip ops/install_release.py`,
 and restart the watcher from the repository root.
 
 ### Rantlist Stage integration (v1.2.0)
@@ -180,3 +179,25 @@ The integration reuses the already deployed Rantlist r630 API, `wss://rantlist.m
 ### Rantlist connection compatibility fix (v1.2.1)
 
 Rantlist r630 requires WebSocket connection query parameters matching its current server-served browser UI. Mixamo Studio now checks the public `https://rantlist.me/version` JSON immediately before connecting and includes `uiVersion`, `protocolVersion`, `uiHash` and `reloadSupport=1` in the `wss://rantlist.me/ws` handshake URL. A deployment race retries once; an unrelated sign-in denial is never retried. The imported portable profile is not stored or sent during version discovery. No Rantlist server edits, SSH operations, or Nginx changes are required for this fix.
+
+
+## Resume an interrupted Mixamo build (v1.2.6)
+
+Studio now shows **↻ Resume** after a failed, cancelled, or interrupted build. It reuses the original uploaded ZIP/FBX, exact animation preset, and output folder — no second upload. The resume command is persisted locally in `~/MixamoLocal/.mixamo-last-job.json` (owner-only file), so it remains available after Flask restarts. No tokens, cookies, Rantlist identities or credentials are stored.
+
+The `fbx/.mixamo-resume.json` checkpoint is written atomically. Each completed FBX is validated and bound to a SHA-256 digest, original character fingerprint, preset fingerprint, and animation spec. Partial downloads remain `.part` files until verified. Download search timeouts are retried up to three times with a controlled page reload. A duplicate browser download is **never** triggered on an ambiguous download event timeout. If all expected animations already exist and validate, the Mixamo stage is skipped and Blender runs directly.
+
+**For a build that failed before v1.2.6:** earlier versions did not save the Flask job configuration. Copy the original ZIP path from the failed job's Logs (the `[paths] Original character` line), select **File path** and the **same animation preset**, then click **Build avatar**. The new pipeline checks the older `fbx/manifest.json` and `source_character/` before adopting verified existing FBXs. Your 17 completed clips should be reused; only the missing eight should be downloaded. Do not re-upload that ZIP as a new file, as this creates a separate output directory.
+
+Resume never deletes original output files; mismatched or unverified legacy exports stop with an explicit error.
+
+## Watcher log boundaries (v1.2.7)
+
+Every release attempt now prints dated START INSTALL and END INSTALL banners and
+explicit separate GitHub and homepage START/END status. The watcher keeps a
+compact event-only history at `updates/.state/update-events.log`; your original
+terminal output still shows all installer, dependency and test lines between them.
+A failed release prints a FAILED boundary before the next attempt. The watcher
+remains a foreground process; leave it running without `--once`. When upgrading
+from an older watcher version, restart the watcher once to run the newly installed
+shell code rather than the previous copy held by the existing Bash process.

@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.5</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.7</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -47,7 +47,7 @@
       <div id="feedback" role="status"></div>
     </div>
     <div id="tab-activity" class="tab-body hidden"><div class="activity-summary"><strong>Pipeline activity</strong><span id="jobStatus" class="job-label">Idle</span></div><p id="phase" class="phase">Waiting for a job</p><div id="manualNotice" class="notice hidden">Action needed in Brave: complete the Mixamo Auto-Rigger. Processing resumes afterward.</div><pre id="jobLog" class="job-log" aria-live="polite">No job activity yet.</pre><div id="outputPath" class="output-path"></div><div class="activity-links"><a id="getGLB" class="btn compact hidden" href="#">↓ Combined GLB</a><a id="getZIP" class="btn compact hidden" href="#">↓ Bundle ZIP</a></div></div>
-    <div class="sidebar-footer"><div class="run-row"><button type="button" class="btn primary" id="start"><span>▶</span> Build avatar</button><button type="button" class="btn danger" id="cancel" disabled title="Cancel current pipeline job">■</button></div><div class="run-caption"><span id="runStatus">No active build</span><span id="runLED" class="led"></span></div></div>
+    <div class="sidebar-footer"><div class="run-row"><button type="button" class="btn primary" id="start"><span>▶</span> Build avatar</button><button type="button" class="btn" id="resumeBuild" title="Continue the last failed or interrupted build; reuse verified FBXs" hidden>↻ Resume</button><button type="button" class="btn danger" id="cancel" disabled title="Cancel current pipeline job">■</button></div><div class="run-caption"><span id="runStatus">No active build</span><span id="runLED" class="led"></span></div></div>
   </aside>
   <main class="viewport" id="viewport">
     <div id="sceneCanvas" aria-label="3D preview viewport"></div>

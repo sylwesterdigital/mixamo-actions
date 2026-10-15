@@ -74,6 +74,31 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse((repo/'updates/.state/published-git-sha').exists())
             self.assertFalse((repo/'updates/.state/published-site-sha').exists())
 
+    def test_failed_update_has_separate_start_end_and_retry_events(self):
+        """Never concatenate a failed attempt and the next update without a boundary."""
+        import os, shutil, subprocess
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            (repo / 'updates').mkdir()
+            (repo / 'ops').mkdir()
+            shutil.copy2(ROOT / 'mixamo-studio-watch.sh', repo / 'mixamo-studio-watch.sh')
+            (repo / 'updates/mixamo-actions-v1.2.7.zip').write_bytes(b'bad fixture')
+            (repo / 'ops/install_release.py').write_text(
+                'import sys\nprint("fixture: installer failed", flush=True)\nsys.exit(1)\n')
+            env = os.environ.copy()
+            env.update(MIXAMO_AUTO_GIT_PUSH='0', MIXAMO_AUTO_DEPLOY='0')
+            proc = subprocess.run(['bash', str(repo / 'mixamo-studio-watch.sh'), '--once'],
+                                  cwd=repo, env=env, capture_output=True, text=True, timeout=15)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn('START INSTALL | mixamo-actions-v1.2.7.zip', proc.stdout)
+            self.assertIn('fixture: installer failed', proc.stdout)
+            self.assertIn('END INSTALL: FAILED | mixamo-actions-v1.2.7.zip', proc.stdout)
+            self.assertLess(proc.stdout.index('START INSTALL'), proc.stdout.index('END INSTALL: FAILED'))
+            events = (repo / 'updates/.state/update-events.log').read_text()
+            self.assertIn('START INSTALL', events)
+            self.assertIn('END INSTALL: FAILED', events)
+            self.assertNotIn('RELEASE COMPLETE', events)
+
     def test_git_push_and_failed_homepage_remain_independent(self):
         """Regression: successful Git commit/tag must not imply homepage deployment."""
         import hashlib, os, shutil, subprocess

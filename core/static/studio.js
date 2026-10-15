@@ -108,6 +108,15 @@ $('start').onclick=async()=>{
   try{const r=await send('/api/jobs',{method:'POST',body:buildForm()});cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;showViewerNotice(`Build started · ${r.animations} animations`);renderJob(r.job);}
   catch(e){feedback(e.message);$('start').disabled=false;}
 };
+$('resumeBuild').onclick=async()=>{
+  feedback('');$('resumeBuild').disabled=true;
+  try{
+    const r=await send('/api/jobs/resume',{method:'POST'});
+    cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;
+    showViewerNotice('Resuming: checking saved FBXs and downloading only unfinished animations.');
+    renderJob(r.job);
+  }catch(e){feedback(e.message);$('resumeBuild').disabled=false;}
+};
 $('cancel').onclick=async()=>{try{await send('/api/jobs/cancel',{method:'POST'});feedback('Cancellation requested',true);}catch(e){feedback(e.message);}};
 const consoleState = $('consoleDrawer');
 const callLog=[];
@@ -169,8 +178,12 @@ function renderJob(job){
   activeJob=job;jobID=job.id;
   const running=['starting','running'].includes(job.status);
   $('start').disabled=running;$('cancel').disabled=!running;
+  $('resumeBuild').hidden=running||!job.resumable;
+  $('resumeBuild').disabled=running;
   $('topJobState').textContent=job.status.toUpperCase();$('globalPhase').textContent=job.phase||job.status;
-  $('runStatus').textContent=job.phase||job.status;
+  const progress=job.resumeProgress;
+  $('runStatus').textContent=(job.phase||job.status)+
+    (progress?.total?` · ${progress.saved}/${progress.total} FBX saved`:'');
   $('runLED').classList.toggle('running',running);
   $('jobStatus').textContent=job.status;
   $('jobStatus').className='job-label '+(job.status==='completed'?'good':job.status==='failed'?'bad':'');

@@ -1,3 +1,23 @@
+## v1.2.7 — 2026-10-15
+
+- Fix a production resume regression: the saved command includes Python `-u`, which v1.2.6 incorrectly rejected with `409 Saved resume command is invalid` and caused the installer test to fail.
+- Validate resumed pipeline commands with an explicit allowed-arguments list and matching original character and preset paths; reject altered, unsafe, or unknown switches.
+- Separate every installation attempt with timestamped START INSTALL and END INSTALL SUCCESS/FAILED banners, including clear rollback and retry messaging.
+- Give GitHub publication and homepage deployment independent START/END banners and a final RELEASE COMPLETE/PARTIAL summary to avoid confusing one attempt with the next.
+- Save compact release event markers to `updates/.state/update-events.log` without storing application credentials or changing the existing model output folders.
+- Preserve checkpointed FBXs, the Flask Model Library, Rantlist integration, and the strictly scoped static-only Ubuntu deployment; no shared-server configuration changes.
+
+## v1.2.6 — 2026-10-15
+
+- Add crash-safe per-animation FBX checkpoints using SHA-256, source-character and motion-preset fingerprints, atomic updates, and strict FBX header validation.
+- Reuse validated animation exports after Mixamo timeouts, browser closures, and failed batches; resume only missing/invalid FBXs and skip Mixamo entirely when all requested files exist.
+- Stage downloads as `.fbx.part` until fully verified and atomically committed; preserve unverified prior files in `.replaced` instead of silently deleting or importing them.
+- Provide a **Resume** action in Studio after failure or interruption, with original uploaded ZIP and settings persisted locally across Flask restarts and no repeated upload.
+- Recover earlier v1.2.5 partial exports by verifying their original `source_character/` and matching previous `fbx/manifest.json`; refuse changed sources or presets.
+- Retry stalled Mixamo search navigation up to three times with bounded wait and page reload, without automatically repeating ambiguous browser download clicks.
+- Display saved FBX counts in the Studio job status; continue to Blender and single combined GLB generation only when all required clips are verified.
+- Keep the isolated Rantlist API, gallery previews, GitHub publishing, and strictly allowlisted static-only Ubuntu homepage deployment unchanged.
+
 ## v1.2.5 — 2026-10-15
 
 - Prevent overlapping gallery cards: use content-sized CSS grid rows for every XL/M/S size and 1:1, 2:3 or 3:2 aspect ratio, independently of the panel's draggable height.

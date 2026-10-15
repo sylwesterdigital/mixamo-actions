@@ -1,11 +1,11 @@
 {
-  "version": "1.2.5",
+  "version": "1.2.7",
   "changes": [
-    "Prevent overlapping gallery cards: use content-sized CSS grid rows for every XL/M/S size and 1:1, 2:3 or 3:2 aspect ratio, independently of the panel's draggable height.",
-    "Keep the model image within each card, with title and action icons overlaid instead of consuming separate rows or obscuring adjacent cards.",
-    "Capture newly saved/refreshed local model thumbnails as 360×540 portrait WebP images with a transparent background and no stage floor or grid.",
-    "Frame the avatar's current pose independently of the viewport, with approximately 15% tighter framing; restore live viewer camera, backdrop, floor, grid and renderer state after capture.",
-    "Document the existing DevTools-only Mixamo Motion Collector and the Studio's Collector download link; do not inject collector code into active Playwright download tabs.",
-    "Preserve local and Rantlist galleries, pipeline assets, model exports, authentication, GitHub publishing and static-only isolated Ubuntu deployment unchanged."
+    "Fix a production resume regression: the saved command includes Python `-u`, which v1.2.6 incorrectly rejected with `409 Saved resume command is invalid` and caused the installer test to fail.",
+    "Validate resumed pipeline commands with an explicit allowed-arguments list and matching original character and preset paths; reject altered, unsafe, or unknown switches.",
+    "Separate every installation attempt with timestamped START INSTALL and END INSTALL SUCCESS/FAILED banners, including clear rollback and retry messaging.",
+    "Give GitHub publication and homepage deployment independent START/END banners and a final RELEASE COMPLETE/PARTIAL summary to avoid confusing one attempt with the next.",
+    "Save compact release event markers to `updates/.state/update-events.log` without storing application credentials or changing the existing model output folders.",
+    "Preserve checkpointed FBXs, the Flask Model Library, Rantlist integration, and the strictly scoped static-only Ubuntu deployment; no shared-server configuration changes."
   ]
 }

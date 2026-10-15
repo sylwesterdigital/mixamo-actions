@@ -115,3 +115,10 @@ through the **Collector ↗** link. Open Mixamo Animations in Brave, open its
 DevTools Console and paste the script there; export `animations.json` and
 import it into Studio. For safety it is not injected into an active Playwright
 download session automatically.
+
+
+### Resumable builds (v1.2.6)
+
+Failed or interrupted builds expose a **↻ Resume** button in Studio (including after an app restart). The last validated job's source path, preset and safe CLI options are stored locally; upload bytes are never copied again. `resume_state.py` validates per-animation FBX hashes and only downloads missing/invalid clips. Browser search timeouts get two bounded retries. Download-button timeouts are not retried automatically, because Mixamo may still be producing a file. Once all clips are present, Blender builds the combined GLB without revisiting Mixamo.
+
+For builds started with an older Studio that did not persist job details, select **File path** with the *original* upload ZIP path from Logs, choose the unchanged preset and click Build. Older `fbx/manifest.json` and saved original source are verified before any legacy FBXs are reused.

@@ -38,6 +38,7 @@ LIBRARY = WORKSPACE / 'library'
 LIBRARY_FILES = LIBRARY / 'files'
 LIBRARY_THUMBS = LIBRARY / 'thumbnails'
 LIBRARY_INDEX = LIBRARY / 'catalog.json'
+LAST_JOB_FILE = WORKSPACE / '.mixamo-last-job.json'
 LIBRARY_LOCK = Lock()
 for folder in (UPLOADS, PRESETS, LOGS, LIBRARY, LIBRARY_FILES, LIBRARY_THUMBS):
     folder.mkdir(parents=True, exist_ok=True)
@@ -48,6 +49,54 @@ app.config['MAX_CONTENT_LENGTH'] = 1250 * 1024 * 1024
 app.config['JSON_SORT_KEYS'] = False
 STATE_LOCK = Lock()
 STATE = {'job': None}
+
+
+def read_last_job():
+    try:
+        data = json.loads(LAST_JOB_FILE.read_text(encoding='utf-8'))
+        if data.get('schema') != 1 or not isinstance(data.get('command'), list):
+            return None
+        return data
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def persist_job(job):
+    # The record has local source/preset paths and CLI switches, never
+    # credentials, Rantlist profile JSON or Adobe/Brave session contents.
+    payload = dict(schema=1, command=job['command'], character=str(job['character']),
+                   output=str(job['output']), preset=str(job['preset']),
+                   characterSha256=job['characterSha256'], presetSha256=job['presetSha256'],
+                   animations=job['animations'], status=job['status'],
+                   id=job['id'], started=job['started'], finished=job.get('finished'))
+    temp = LAST_JOB_FILE.with_suffix('.json.tmp')
+    try:
+        with temp.open('w', encoding='utf-8') as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write('\n')
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp, 0o600)
+        os.replace(temp, LAST_JOB_FILE)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def resumable_record():
+    record = read_last_job()
+    if record and record.get('status') in ('failed', 'cancelled', 'interrupted', 'starting', 'running'):
+        return record
+    return None
+
+
+def recovered_job(record):
+    return dict(id=record['id'], status='interrupted' if record['status'] in ('starting','running') else record['status'],
+                phase='Saved build available to resume', started=record['started'],
+                finished=record.get('finished'), returncode=None, error=None,
+                character=record['character'], output=record['output'], lines=[],
+                logCursor=0, oldestLine=0, combinedGlb=False, bundle=False,
+                resumable=True, resumeProgress=resumed_progress(record['output']))
+
 RANTLIST_BRIDGE = RantlistBridge()  # No imported profiles/tokens written to disk.
 API_EVENTS = deque(maxlen=300)
 API_EVENTS_LOCK = Lock()
@@ -154,6 +203,26 @@ def session_status():
             'browser': browser_executable(), 'profile': str(Path(os.environ.get('MIXAMO_BRAVE_PROFILE', str(Path.home() / '.mixamo-brave-profile'))).expanduser())}
 
 
+def resumed_progress(folder):
+    """Cheap UI progress snapshot; cryptographic verification happens in pipeline."""
+    checkpoint = Path(folder) / 'fbx' / '.mixamo-resume.json'
+    try:
+        payload = json.loads(checkpoint.read_text(encoding='utf-8'))
+        from resume_state import planned
+        rows = planned(payload['requested'])
+        completed = payload.get('completed', {})
+        saved = 0
+        for _, name in rows:
+            entry = completed.get(name, {})
+            file = checkpoint.parent / name
+            if isinstance(entry, dict) and file.is_file() and not file.is_symlink() and \
+                    file.stat().st_size == entry.get('size'):
+                saved += 1
+        return {'saved': saved, 'total': len(rows), 'remaining':len(rows) - saved}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def public_job(job, cursor=0):
     if job is None:
         return None
@@ -165,7 +234,9 @@ def public_job(job, cursor=0):
             'character': str(job['character']), 'output': str(job['output']),
             'lines': lines, 'logCursor': job['next_index'], 'oldestLine': first,
             'combinedGlb': (job['output'] / 'glb' / (job['output'].name + '-anims.glb')).is_file(),
-            'bundle': (job['output'] / 'character_bundle.zip').is_file()}
+            'bundle': (job['output'] / 'character_bundle.zip').is_file(),
+            'resumable': job['status'] in ('failed','cancelled','interrupted'),
+            'resumeProgress': resumed_progress(job['output'])}
 
 
 def log_job(job, message):
@@ -362,6 +433,7 @@ def worker(job, command):
                 with STATE_LOCK:
                     job['status'] = 'cancelled'
                     job['finished'] = now()
+                persist_job(job)
                 return
             log_job(job, '[local] Running Mixamo pipeline')
             process = subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -370,6 +442,7 @@ def worker(job, command):
                 job['process'] = process
                 job['status'] = 'running'
                 cancel_now = job.get('cancel_requested', False)
+            persist_job(job)
             if cancel_now:
                 import signal
                 try:
@@ -398,12 +471,14 @@ def worker(job, command):
                 if code != 0 and not job.get('cancel_requested'):
                     job['error'] = f'Pipeline exited with code {code}. Check logs for details.'
             log_job(job, f'[local] Finished with exit code {code}')
+            persist_job(job)
     except Exception as exc:
         with STATE_LOCK:
             job['status'] = 'failed'
             job['finished'] = now()
             job['error'] = str(exc)
         log_job(job, f'[local ERROR] {exc}')
+        persist_job(job)
 
 
 @app.get('/')
@@ -439,6 +514,10 @@ def status():
         since = 0
     with STATE_LOCK:
         job = public_job(STATE['job'], since)
+    if job is None:
+        record = resumable_record()
+        if record:
+            job = recovered_job(record)
     return jsonify(job=job, session=session_status(), presets=saved_presets())
 
 
@@ -555,7 +634,10 @@ def start_job():
             if field_bool(field):
                 command.append(flag)
         jid = uuid.uuid4().hex[:12]
-        job = {'id': jid, 'status': 'starting', 'phase': 'Preparing', 'started': now(), 'finished': None,
+        from resume_state import digest
+        job = {'command': command, 'preset': preset, 'characterSha256': digest(character),
+               'presetSha256': digest(preset),
+               'id': jid, 'status': 'starting', 'phase': 'Preparing', 'started': now(), 'finished': None,
                'character': character, 'output': output, 'lines': deque(maxlen=2000), 'next_index': 0,
                'first_index': 0, 'process': None, 'returncode': None, 'error': None,
                'cancel_requested': False, 'animations': count}
@@ -563,12 +645,52 @@ def start_job():
             if STATE['job'] and STATE['job']['status'] in ('starting', 'running'):
                 return respond_error('Another pipeline job is already running', 409)
             STATE['job'] = job
+        persist_job(job)
         Thread(target=worker, args=(job, command), daemon=True).start()
         with STATE_LOCK:
             snapshot = public_job(job)
         return jsonify(ok=True, job=snapshot, animations=count)
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         return respond_error(exc)
+
+
+@app.post('/api/jobs/resume')
+def resume_job():
+    """Resume the most recent interrupted job without uploading again."""
+    from resume_state import digest, valid_resume_command
+    with STATE_LOCK:
+        current = STATE['job']
+        if current and current['status'] in ('starting','running'):
+            return respond_error('Another pipeline job is still running.', 409)
+        record = resumable_record()
+        if record is None:
+            return respond_error('No interrupted build to resume.', 409)
+        character = Path(record['character'])
+        preset = Path(record['preset'])
+        if not character.is_file() or not preset.is_file():
+            return respond_error('Original uploaded character or preset is missing. Files were not changed.', 409)
+        if digest(character) != record['characterSha256'] or digest(preset) != record['presetSha256']:
+            return respond_error('Character or animation preset changed since the failed build. '
+                                 'Cannot safely mix old animations with new input.', 409)
+        command = record['command']
+        # Don't execute any command read from disk other than this app's own
+        # verified pipeline entrypoint. No shell, no user-controlled executable.
+        if not valid_resume_command(command, executable=sys.executable,
+                                    pipeline=ROOT / 'mixamo_pipeline.py',
+                                    character=character, preset=preset):
+            return respond_error('Saved resume command is invalid.', 409)
+        jid = uuid.uuid4().hex[:12]
+        job = dict(command=command, preset=preset, characterSha256=record['characterSha256'],
+                   presetSha256=record['presetSha256'], id=jid, status='starting',
+                   phase='Resuming saved downloads', started=now(), finished=None,
+                   character=character, output=Path(record['output']),
+                   lines=deque(maxlen=2000), next_index=0, first_index=0,
+                   process=None, returncode=None, error=None,
+                   cancel_requested=False, animations=record['animations'])
+        STATE['job'] = job
+    persist_job(job)
+    Thread(target=worker, args=(job, command), daemon=True).start()
+    return jsonify(ok=True, job=public_job(job), animations=job['animations'])
 
 
 @app.post('/api/jobs/cancel')

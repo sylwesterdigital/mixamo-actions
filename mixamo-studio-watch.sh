@@ -52,6 +52,20 @@ PY
 }
 checksum() { shasum -a 256 "$1" | awk '{print $1}'; }
 
+# Every update attempt has a matching START/END marker, even if installation
+# rolls back. Keep a compact persistent index, separate from verbose pip/tests.
+log_update_event() {
+  local event="$1" subject="$2" detail="${3:-}"
+  local stamp
+  stamp="$(date '+%Y-%m-%d %H:%M:%S %z')"
+  printf '\n%s\n' '=============================================================================='
+  printf '[%s] MIXAMO UPDATE | %s | %s\n' "$stamp" "$event" "$subject"
+  [[ -n "$detail" ]] && printf '  %s\n' "$detail"
+  printf '%s\n\n' '=============================================================================='
+  # This event-only file is useful when several retries run in one terminal.
+  printf '%s | %s | %s | %s\n' "$stamp" "$event" "$subject" "$detail" >> "$STATE/update-events.log" 2>/dev/null || true
+}
+
 publish_git() {
   # Stage ONLY manifest-verified release files, never unrelated local work.
   if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1;then echo 'ERROR: Not a Git repository';return 1;fi
@@ -135,7 +149,14 @@ echo "Mixamo Studio watcher: $ROOT"
 echo "Watching: $UPDATES/mixamo-actions-vMAJOR.MINOR.PATCH.zip"
 echo "Install target: $ROOT/core"
 echo "Git: $AUTO_GIT_PUSH | Homepage deploy: $AUTO_DEPLOY"
+echo "Events: $STATE/update-events.log"
+if [[ "$RUN_ONCE" == 1 ]];then
+  echo 'Mode: ONE CHECK (--once). The watcher will exit afterward.'
+else
+  echo 'Mode: CONTINUOUS. Waiting for new releases; Ctrl+C to stop.'
+fi
 PUBLISH_FAILURE=0
+ATTEMPT=0
 while true; do
   package="$(latest_release)"
   if [[ -n "$package" && -f "$package" ]];then
@@ -145,13 +166,20 @@ while true; do
     if [[ -n "$first" && "$first" == "$second" ]];then
       sha="$(checksum "$package")"
       installed_sha="$(cat "$STATE/last-successful-sha" 2>/dev/null || true)"
+      EVENT_WORKED=0
+      INSTALL_FAILED=0
+      release_name="$(basename "$package")"
       if [[ "$sha" != "$installed_sha" ]];then
-        echo "Installing $(basename "$package")"
+        ATTEMPT=$((ATTEMPT + 1))
+        EVENT_WORKED=1
+        log_update_event 'START INSTALL' "$release_name" "Attempt $ATTEMPT · validating, testing, and restarting local Studio"
         if [[ -f "$ROOT/ops/install_release.py" ]] && python3 "$ROOT/ops/install_release.py" "$package" --repo "$ROOT";then
           printf '%s\n' "$sha" > "$STATE/last-successful-sha"
           rm -f "$STATE/published-git-sha" "$STATE/published-site-sha"
+          log_update_event 'END INSTALL: SUCCESS' "$release_name" 'Tests and local Flask health check passed.'
         else
-          echo 'ERROR: Update failed or postponed. Will retry after interval.'
+          INSTALL_FAILED=1
+          log_update_event 'END INSTALL: FAILED' "$release_name" 'Installer returned an error; rollback completed or attempted. Previous release retained. Retry in 20 seconds.'
           [[ "$RUN_ONCE" == 1 ]] && exit 1
           sleep 20
         fi
@@ -167,16 +195,36 @@ while true; do
         # Disabled publishing is not a successful publish. Leave its marker
         # absent so enabling it later publishes the already installed release.
         if [[ "$AUTO_GIT_PUSH" == 1 && "$(cat "$STATE/published-git-sha" 2>/dev/null || true)" != "$sha" ]];then
+          EVENT_WORKED=1
+          log_update_event 'START GITHUB' "$release_name" 'Publishing main and version tag.'
           printf '%s\n' "$now_epoch" > "$STATE/last-publish-at"
-          if publish_git;then printf '%s\n' "$sha" > "$STATE/published-git-sha";else
+          if publish_git;then
+            printf '%s\n' "$sha" > "$STATE/published-git-sha"
+            log_update_event 'END GITHUB: SUCCESS' "$release_name" 'Commit and tag published.'
+          else
             PUBLISH_FAILURE=1
-            echo 'WARNING: Git publish failed. Installed app remains healthy; will retry.';fi
+            log_update_event 'END GITHUB: FAILED' "$release_name" 'Local install remains healthy. Will retry publishing; no reinstall required.'
+          fi
         fi
         if [[ "$AUTO_DEPLOY" == 1 && "$(cat "$STATE/published-site-sha" 2>/dev/null || true)" != "$sha" ]];then
+          EVENT_WORKED=1
+          log_update_event 'START HOMEPAGE' "$release_name" 'Publishing static files only to the configured existing site directory.'
           printf '%s\n' "$now_epoch" > "$STATE/last-publish-at"
-          if publish_site;then printf '%s\n' "$sha" > "$STATE/published-site-sha";else
+          if publish_site;then
+            printf '%s\n' "$sha" > "$STATE/published-site-sha"
+            log_update_event 'END HOMEPAGE: SUCCESS' "$release_name" 'Static homepage files deployed.'
+          else
             PUBLISH_FAILURE=1
-            echo 'WARNING: Homepage deploy failed; will retry without reinstalling.';fi
+            log_update_event 'END HOMEPAGE: FAILED' "$release_name" 'No application reinstall; remote publication will retry.'
+          fi
+        fi
+        if [[ "$EVENT_WORKED" == 1 ]];then
+          if [[ "$AUTO_GIT_PUSH" != 1 || "$(cat "$STATE/published-git-sha" 2>/dev/null || true)" == "$sha" ]] && \
+             [[ "$AUTO_DEPLOY" != 1 || "$(cat "$STATE/published-site-sha" 2>/dev/null || true)" == "$sha" ]]; then
+            log_update_event 'RELEASE COMPLETE' "$release_name" "Local installation successful. GitHub: $AUTO_GIT_PUSH (1=enabled); Homepage: $AUTO_DEPLOY (1=enabled)."
+          else
+            log_update_event 'RELEASE PARTIAL' "$release_name" 'At least one remote publication is pending retry.'
+          fi
         fi
       fi
     fi

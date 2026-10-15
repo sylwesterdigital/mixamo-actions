@@ -17,6 +17,8 @@ import sys
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from resume_state import ResumePlan, digest
+from mixamo_browser import read_animations
 
 IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.bmp', '.tga', '.exr'}
 MAX_MEMBER = 1024 * 1024 * 1024
@@ -74,6 +76,44 @@ def prepare_source(path: Path, dest: Path) -> tuple[Path, list[Path]]:
             paths.append(target)
         base = dest / fbxs[0][1]
         return base, [f for f in paths if f.suffix.lower() in IMAGE_EXTS]
+
+
+def verify_legacy_source(character: Path, source_dir: Path) -> None:
+    """Before adopting pre-checkpoint exports, verify the staged base FBX.
+
+    Releases before 1.2.6 did not bind an output manifest to a source hash,
+    but the source extraction persisted on disk. Compare the exact embedded
+    FBX before any new extraction can overwrite that evidence.
+    """
+    import hashlib
+    if character.suffix.lower() == '.fbx':
+        old = source_dir / character.name
+        same = old.is_file() and digest(old) == digest(character)
+    elif character.suffix.lower() == '.zip':
+        try:
+            with zipfile.ZipFile(character) as z:
+                names = [n for n in z.namelist() if not n.endswith('/') and
+                         Path(n).suffix.lower() == '.fbx' and '__MACOSX' not in Path(n).parts
+                         and not Path(n).name.startswith('._')]
+                if len(names) != 1:
+                    raise ValueError('Cannot verify the original source FBX in legacy ZIP')
+                candidate = source_dir / names[0]
+                if not candidate.is_file() or candidate.is_symlink():
+                    same = False
+                else:
+                    expected = hashlib.sha256()
+                    with z.open(names[0]) as stream:
+                        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                            expected.update(chunk)
+                    same = digest(candidate) == expected.hexdigest()
+        except (OSError, zipfile.BadZipFile):
+            same = False
+    else:
+        same = False
+    if not same:
+        raise RuntimeError('Cannot confirm that legacy FBX downloads belong to this '
+                           'character. Original output files are unchanged; review '
+                           'source_character/ before choosing a fresh output directory.')
 
 
 def inspect_glb(path: Path) -> dict:
@@ -161,13 +201,24 @@ def main(argv=None):
     fbx_dir, glb_dir, source_dir = outdir / 'fbx', outdir / 'glb', outdir / 'source_character'
     fbx_dir.mkdir(parents=True, exist_ok=True)
     glb_dir.mkdir(parents=True, exist_ok=True)
+    # Identify the original ZIP and preset before touching an extracted source
+    # folder. A mismatch must not overwrite even the previous base character.
+    specs = read_animations(args.animations.expanduser().resolve())
+    fingerprint = digest(character)
+    if not (fbx_dir / '.mixamo-resume.json').is_file() and any(fbx_dir.glob('*.fbx')):
+        verify_legacy_source(character, source_dir)
+    checkpoint = ResumePlan(fbx_dir, specs, source_sha256=fingerprint,
+                            preset_sha256=digest(args.animations.expanduser().resolve()))
+    checkpoint.ensure_no_untracked()
     source_fbx, textures = prepare_source(character, source_dir)
+    print(f'[resume] Found {checkpoint.completed()}/{len(specs)} validated downloads; '
+          f'{len(checkpoint.missing())} remaining.', flush=True)
     print(f'[paths] Original character: {character}')
     print(f'[paths] All exports:       {outdir}')
     print(f'[source] Blender base:    {source_fbx} ({len(textures)} extracted texture(s))')
     browser_cmd = [sys.executable, str(ROOT / 'mixamo_browser.py'), '--character', str(source_fbx),
                    '--animations', str(args.animations.expanduser().resolve()), '--out', str(fbx_dir), '--cdp', args.cdp,
-                   '--manual-rig-timeout', str(args.manual_rig_timeout)]
+                   '--manual-rig-timeout', str(args.manual_rig_timeout), '--source-sha256', fingerprint]
     if args.skip_upload:
         browser_cmd.append('--skip-upload')
     if args.continue_on_error:
@@ -192,14 +243,25 @@ def main(argv=None):
         print('[dry-run] Browser command:', ' '.join(map(shlex_quote, browser_cmd)))
         print('[dry-run] Blender command:', ' '.join(map(shlex_quote, blender_cmd)))
         return 0
-    if not args.skip_download:
-        print('[phase 1/3] Mixamo download')
+    if not args.skip_download and not checkpoint.missing() and not any(spec.get('redownload') for spec in specs):
+        print('[resume] All animations already verified; skipping Mixamo and proceeding to Blender.', flush=True)
+    elif not args.skip_download:
+        print(f'[phase 1/3] Mixamo download ({len(checkpoint.missing())} remaining)', flush=True)
         ret = subprocess.run(browser_cmd, check=False).returncode
         if ret and not args.continue_on_error:
             raise RuntimeError(f'Mixamo downloader exited {ret}; Blender stage not started. Rerun to resume.')
     else:
         print('[phase 1/3] Using existing FBX downloads (--skip-download)')
-    clips = sorted(p for p in fbx_dir.glob('*.fbx') if p.is_file() and p.stat().st_size)
+    # Never make a completed GLB from partial/unverified FBXs, even if the
+    # browser stage exited 0 or --skip-download was chosen.
+    checkpoint = ResumePlan(fbx_dir, specs, source_sha256=fingerprint,
+                            preset_sha256=digest(args.animations.expanduser().resolve()))
+    missing = checkpoint.missing()
+    if missing and not args.continue_on_error:
+        raise RuntimeError(f'Build incomplete: {len(missing)}/{len(specs)} animations still missing or invalid. '
+                           f'Next: {missing[0]}. Resume this job to finish downloads.')
+    clips = sorted(fbx_dir / name for spec, name in checkpoint.expected if checkpoint.valid(spec, name))
+    print(f'[resume] Ready for Blender: {len(clips)}/{len(specs)} verified clips.', flush=True)
     if not clips:
         raise RuntimeError(f'No FBX animation files in {fbx_dir}; nothing to build')
     if not args.blender.expanduser().is_file():

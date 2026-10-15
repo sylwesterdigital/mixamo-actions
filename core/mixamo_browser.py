@@ -28,6 +28,7 @@ from urllib.error import HTTPError, URLError
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
+from resume_state import ResumePlan, digest, planned, verify_fbx
 
 MIXAMO = "https://www.mixamo.com/"
 DEFAULT_PROFILE = Path.home() / ".mixamo-playwright-profile"
@@ -634,11 +635,19 @@ def download_one(page, outpath: Path, spec: dict):
                            'in Logs. Re-run the job to resume existing FBXs.') from exc
     if not download.suggested_filename.lower().endswith(".fbx"):
         raise RuntimeError(f"Unexpected downloaded file: {download.suggested_filename}")
-    download.save_as(str(outpath))  # BLOCKS until the actual FBX transfer completes
-    if download.failure():
-        raise RuntimeError(f"Browser download failed: {download.failure()}")
-    if not outpath.is_file() or outpath.stat().st_size == 0:
-        raise RuntimeError("Downloaded FBX is missing or empty")
+    # Stage downloads under a different extension and move only verified FBXs
+    # into the completed set. A process crash can never mark a partial file done.
+    staged = outpath.with_name(outpath.name + '.part')
+    staged.unlink(missing_ok=True)
+    try:
+        download.save_as(str(staged))
+        if download.failure():
+            raise RuntimeError(f"Browser download failed: {download.failure()}")
+        if not verify_fbx(staged):
+            raise RuntimeError("Mixamo returned an invalid/truncated FBX. Download not checkpointed.")
+        os.replace(staged, outpath)
+    finally:
+        staged.unlink(missing_ok=True)
     return download.suggested_filename
 
 
@@ -666,6 +675,7 @@ def run():
                         metavar="URL", help="Attach to already-running Brave using Chrome DevTools Protocol; "
                         "default endpoint: http://127.0.0.1:9222")
     parser.add_argument("--skip-upload", action="store_true", help="Use current Mixamo character without uploading")
+    parser.add_argument("--source-sha256", default="", help="Original character digest for safe resume")
     parser.add_argument("--auto-confirm-character", action="store_true", help="Wait for the editor instead of prompting at upload")
     parser.add_argument("--continue-on-error", action="store_true", help="Skip failed animations and continue")
     parser.add_argument("--manual-rig-timeout", type=int, default=900,
@@ -679,7 +689,12 @@ def run():
     archive_path = args.out.parent / (args.out.name + ".zip")
     manifest_path = args.out / "manifest.json"
     successes, failures = [], []
-    used_names = set()
+    source_fingerprint = args.source_sha256 or (digest(args.character) if args.character else '')
+    resume = ResumePlan(args.out, specs, source_sha256=source_fingerprint,
+                        preset_sha256=digest(args.animations))
+    resume.ensure_no_untracked()
+    print(f'[resume] {resume.completed()}/{len(specs)} verified animations; '
+          f'{len(resume.missing())} remaining.', flush=True)
 
     with tempfile.TemporaryDirectory(prefix="mixamo-character-") as temp:
         character = prepare_character(args.character, Path(temp)) if not args.skip_upload else None
@@ -732,39 +747,48 @@ def run():
                     # --skip-upload: no new character, so no upload dialog to confirm.
                     page.locator('.editor-sidebar .sidebar-header button').filter(
                         has_text=re.compile(r'^\s*Download\s*$', re.I)).first.wait_for(timeout=30000)
-                for n, spec in enumerate(specs, start=1):
-                    label = str(spec.get("filename") or spec.get("title") or spec.get("search"))
-                    if spec.get("description") and not spec.get("filename"):
-                        label += " - " + str(spec["description"])
-                    basename = safe_filename(label)
-                    original_name = basename
-                    suffix = 2
-                    while basename.casefold() in used_names:
-                        basename = f"{original_name}-{suffix}"
-                        suffix += 1
-                    used_names.add(basename.casefold())
-                    target = args.out / (basename + ".fbx")
-                    print(f"\n[{n}/{len(specs)}] {label}")
-                    force = bool(spec.get("redownload", False))
-                    if target.is_file() and target.stat().st_size > 0 and not force:
-                        print(f"[skip] Already downloaded: {target.name}")
-                        successes.append({"requested": spec, "file": target.name, "status": "already present"})
+                for n, (spec, name) in enumerate(resume.expected, start=1):
+                    label = str(spec.get('filename') or spec.get('title') or spec.get('search'))
+                    target = args.out / name
+                    print(f"\n[{n}/{len(specs)}] {label}", flush=True)
+                    force = bool(spec.get('redownload', False))
+                    if resume.valid(spec, name) and not force:
+                        print(f"[skip] Verified completed animation: {target.name}", flush=True)
+                        successes.append({"requested": spec, "file": target.name, "status": "verified resume"})
                         continue
-                    if force and target.exists():
-                        # Quarantine the older animation so even --continue-on-error
-                        # never imports the incorrect old FBX into the combined GLB.
-                        previous = args.out / '.replaced'
-                        previous.mkdir(exist_ok=True)
-                        backup = previous / (target.name + '.old')
+                    if target.exists():
+                        # An unmatched/truncated file is never reused. Preserve it
+                        # for inspection instead of silently deleting it.
+                        backup_dir = args.out / '.replaced'
+                        backup_dir.mkdir(exist_ok=True)
+                        backup = backup_dir / f'{target.stem}-{int(time.time_ns())}.fbx'
                         target.replace(backup)
-                        print(f"[replace] Old file moved aside: {backup}")
+                        print(f'[resume] Unverified/forced FBX moved aside: {backup}', flush=True)
+                    # Clear the ledger row before attempting replacement; a
+                    # cancelled download cannot leave a false success marker.
+                    resume.entries.pop(name, None)
+                    resume.save()
                     try:
-                        chosen = choose_result(page, spec)
+                        for attempt in range(1, 4):
+                            try:
+                                chosen = choose_result(page, spec)
+                                break
+                            except (PWTimeout, RuntimeError) as search_exc:
+                                if attempt >= 3 or ('search' not in str(search_exc).lower() and not isinstance(search_exc, PWTimeout)):
+                                    raise
+                                print(f'[retry] Search for {label!r} did not settle '
+                                      f'(attempt {attempt}/3); retrying in {attempt * 2}s.', flush=True)
+                                page.wait_for_timeout(attempt * 2000)
+                                # Re-enter the Mixamo SPA after a stuck search:
+                                # assigning the same URL hash alone does not
+                                # always cause the result list to refetch.
+                                page.reload(wait_until='domcontentloaded', timeout=60000)
                         in_place = set_in_place(page, spec)
                         print(f"[match] {chosen['title']} — {chosen['description']} "
                               f"(motionId={chosen['motionId']}) | In Place: {in_place}")
                         source_name = download_one(page, target, spec)
-                        print(f"[saved] {target} ({target.stat().st_size:,} bytes)")
+                        resume.record(spec, name)
+                        print(f"[saved] {target} ({target.stat().st_size:,} bytes); checkpoint committed", flush=True)
                         successes.append({"requested": spec, "matched": chosen,
                                           "inPlace": in_place, "sourceFilename": source_name,
                                           "file": target.name, "status": "downloaded"})
@@ -791,6 +815,8 @@ def run():
                     cdp_browser.close()
                 else:
                     browser.close()
+    print(f'[resume] Checkpoint: {resume.completed()}/{len(specs)} verified; '
+          f'{len(resume.missing())} remaining.', flush=True)
     print(f"\nFinished: {len(successes)} successful, {len(failures)} failed. ZIP: {archive_path if archive_path.exists() else '(none)'}")
     return 1 if failures else 0
 
