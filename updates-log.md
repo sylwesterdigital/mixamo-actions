@@ -1,5 +1,13 @@
 # Mixamo Studio — update log
 
+## v1.1.2 — 2026-10-15
+
+- Fix `Username for https://github.com`: GitHub HTTPS `origin` is converted to a GitHub SSH push target without modifying the configured fetch remote.
+- Set `GIT_TERMINAL_PROMPT=0` and SSH `BatchMode=yes` for unattended release publishing; authentication failures produce actionable errors instead of blocking the watcher.
+- Preserve previously committed-but-unpushed releases: retry `main` and version tag pushes independently of local installation, using the configured SSH agent/key.
+- Support `MIXAMO_GIT_PUSH_URL` to override the push destination for custom authorized SSH remotes; keep existing local/bare repositories valid for tests.
+- Add Git transport tests and preserve current Flask Studio, Model Library, Blender pipeline, and Ubuntu homepage deployment.
+
 ## v1.1.1 — 2026-10-15
 
 - Prevent locally edited release-managed README.md from blocking a newer version: save original bytes in `updates/.backups/before-vX.Y.Z-*/README.md` before replacing the release copy.

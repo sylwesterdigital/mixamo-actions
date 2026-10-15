@@ -1,10 +1,10 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "changes": [
-    "Prevent locally edited release-managed README.md from blocking a newer version: save original bytes in `updates/.backups/before-vX.Y.Z-*/README.md` before replacing the release copy.",
-    "Record preserved tracked changes in `updates/.backups/.../local-edits.json`, and restore them automatically if installation or health checks fail.",
-    "Refuse updates when release-managed Git changes are staged, so automatic publication never mixes pending user commits into a release.",
-    "Reject existing release target symlinks to avoid writes outside the repository.",
-    "Preserve v1.1.0 Model Library, authenticated Mixamo pipeline, and combined GLB export."
+    "Fix `Username for https://github.com`: GitHub HTTPS `origin` is converted to a GitHub SSH push target without modifying the configured fetch remote.",
+    "Set `GIT_TERMINAL_PROMPT=0` and SSH `BatchMode=yes` for unattended release publishing; authentication failures produce actionable errors instead of blocking the watcher.",
+    "Preserve previously committed-but-unpushed releases: retry `main` and version tag pushes independently of local installation, using the configured SSH agent/key.",
+    "Support `MIXAMO_GIT_PUSH_URL` to override the push destination for custom authorized SSH remotes; keep existing local/bare repositories valid for tests.",
+    "Add Git transport tests and preserve current Flask Studio, Model Library, Blender pipeline, and Ubuntu homepage deployment."
   ]
 }

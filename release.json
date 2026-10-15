@@ -1,18 +1,18 @@
 {
   "name": "mixamo-actions",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "date": "2026-10-15",
   "changes": [
-    "Prevent locally edited release-managed README.md from blocking a newer version: save original bytes in `updates/.backups/before-vX.Y.Z-*/README.md` before replacing the release copy.",
-    "Record preserved tracked changes in `updates/.backups/.../local-edits.json`, and restore them automatically if installation or health checks fail.",
-    "Refuse updates when release-managed Git changes are staged, so automatic publication never mixes pending user commits into a release.",
-    "Reject existing release target symlinks to avoid writes outside the repository.",
-    "Preserve v1.1.0 Model Library, authenticated Mixamo pipeline, and combined GLB export."
+    "Fix `Username for https://github.com`: GitHub HTTPS `origin` is converted to a GitHub SSH push target without modifying the configured fetch remote.",
+    "Set `GIT_TERMINAL_PROMPT=0` and SSH `BatchMode=yes` for unattended release publishing; authentication failures produce actionable errors instead of blocking the watcher.",
+    "Preserve previously committed-but-unpushed releases: retry `main` and version tag pushes independently of local installation, using the configured SSH agent/key.",
+    "Support `MIXAMO_GIT_PUSH_URL` to override the push destination for custom authorized SSH remotes; keep existing local/bare repositories valid for tests.",
+    "Add Git transport tests and preserve current Flask Studio, Model Library, Blender pipeline, and Ubuntu homepage deployment."
   ],
   "files": {
     ".gitignore": "f4f8dff5c1232ce3f1951b82c622df9b7e4e31c1141176ad433d54d2e1c279cc",
-    "README.md": "af9df4ff5be05aaddcb1151459bbfd65c7631d82cf3000222f62408b998d1cc5",
-    "VERSION": "cc52f678848b814373757b460383bf61960e4943c203735adde0a350b3e50989",
+    "README.md": "b373a81e4945424913fd6f4a8f0844c7526afd4baa37a852d4f11a13e1b3eafd",
+    "VERSION": "77123b8e4bdbd54505bf6e8021527ac60281602a06fe307564532c4dba39dbca",
     "core/.gitignore": "bb92ce161fd5e533679722219b747e4e41e7c629968731feb1abf32ea6d203c9",
     "core/README.md": "8032dbaecc5f007b18f0d77e16abd18846cd44a3d01e3ab60d2767496d4d22c8",
     "core/animations.json": "6bf64b1024811ab5d46daf958616192550e86ee2d31030ebeb00b1935708ff4b",
@@ -30,20 +30,22 @@
     "core/static/viewer.mjs": "2091ed458611a73b2a9ab0a95329d54c288912b6c8f9c4e22321cb7576484c2c",
     "core/templates/index.html": "649fe5217d465f35ff55cb5e0d5ee0ce3ff385a93e8b18eb1d6b17d400884f51",
     "core/tests/test_local_app.py": "3c91b6d3cee4a27a34db2902243820c81773cb0deb07f3bb135425ba3deb3178",
-    "mixamo-studio-watch.sh": "a6f95f984322f29f3fe10e5587e2ab10c9d0f43cd6832f5fdaf3f57ef1fefaad",
-    "mixamo-watch.env.example": "2a45171c70010d3c05feff293a7d7cb0c4b5bcf74ce2291e5bf8096c2c50380b",
+    "mixamo-studio-watch.sh": "9da3670d22921b95ef32889dffe2ef7102b86afc62c262f67408697973964855",
+    "mixamo-watch.env.example": "2169aa0a77125c434dc438b3b84dc428f2b570c035394b71635ab4b87d6db23a",
     "ops/build_release.py": "11f9ee4082033c812f03373977d9b58e0aed383ce2d8e46ef14025f8420b0452",
     "ops/deploy-homepage.sh": "46e094db3f1f51878d92b8c2e1f2e9b09510bb79cc91144c5fc3e3bbb9f1c168",
+    "ops/git_transport.py": "2d48f960a5ce05d19cb3456c0ffb1e0cc5182f7ce187e935c5181ffb981d500d",
     "ops/install_release.py": "85151646b8cae239cd86544ed61c3e5e9d66fe61d24df54aa05d90719f5a7c10",
     "ops/nginx-location.example.conf": "62429abefb5ce2679afde125576ca18190101d43cb661ce08862745ee8de2bca",
+    "ops/test_git_transport.py": "bf46c86ece0e8d0a8c0b15820d6456d8d85d8b04ba2c98e45aa11c638c3c3f1e",
     "ops/test_release.py": "5a6cae2bd2fa0b01baeb371a6b2f8bda44d6e964688d0bfc248f706af9de5011",
     "site/.htaccess": "d12cb219d07e577a7fd0da974b3d34571f5f4b03def39c8fe09bfa7c9f142342",
     "site/favicon.svg": "5022a287f1f81074ac007403fcb542240f49fa0b34d0ce8f93d49ce9f0f0dc0b",
     "site/index.html": "b1ff4a40a3514e526341086976b86112183979a4a821994f145fe29f8e0f5528",
     "site/release.js": "bfaa0653cbfa59062c1467a4a24645ec2edfe0fbe19429eeaed084eb236e6d9a",
-    "site/release.json": "f73eac426131c20d7defd948940c45d094377cc7abb0027bf6a2b821e4050fb4",
+    "site/release.json": "ebf95fa8851a0790dbad86110b366ad1bef3cf6966fd2e940a5f7f61d119da64",
     "site/styles.css": "801454b8de4a150ae131e99e5f228d8a44facff39fa8bd44eb22e52233cb0ea0",
     "tests/test_release_integrity.py": "959dd927c7111eb4dccbc92f0a63c7f2d246b6885fe9dbd857edc38926c15e67",
-    "updates-log.md": "244b8011cff460045292baec8bed9b8766960d57e0c445b189240d0275b8708a"
+    "updates-log.md": "4cbb1246e5f257f20b07e5860db9179bb669a3420364e765c49f49573baa50ab"
   }
 }

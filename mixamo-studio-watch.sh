@@ -93,7 +93,20 @@ PYRELEASE
   if ! git -C "$ROOT" diff --cached --quiet;then
     git -C "$ROOT" commit -m "release: mixamo-actions v$version" || return 1
   fi
-  git -C "$ROOT" push origin main || return 1
+  # Prefer GitHub SSH pushes (like the Rantlist SSH deployment), without
+  # changing origin's fetch URL or requiring a username/password prompt.
+  # File:// and local bare repositories remain supported for integration tests.
+  local push_target
+  if ! push_target="$(python3 "$ROOT/ops/git_transport.py" --repo "$ROOT")";then
+    echo 'ERROR: Cannot determine a non-interactive Git push target.'; return 1
+  fi
+  export GIT_TERMINAL_PROMPT=0
+  export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=12}"
+  if ! git -C "$ROOT" push "$push_target" main;then
+    echo 'ERROR: GitHub push failed. Configure SSH access: ssh -T git@github.com'
+    echo 'Git commit stays local; watcher will retry without reinstalling.'
+    return 1
+  fi
   if git -C "$ROOT" rev-parse -q --verify "refs/tags/v$version" >/dev/null;then
     local target current
     target="$(git -C "$ROOT" rev-list -n 1 "v$version")"
@@ -104,7 +117,9 @@ PYRELEASE
   else
     git -C "$ROOT" tag "v$version" || return 1
   fi
-  git -C "$ROOT" push origin "v$version" || return 1
+  if ! git -C "$ROOT" push "$push_target" "v$version";then
+    echo 'ERROR: Git tag push failed; watcher will retry.'; return 1
+  fi
   echo "Git commit and v$version tag published."
 }
 
