@@ -1,10 +1,13 @@
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "changes": [
-    "Fix `Username for https://github.com`: GitHub HTTPS `origin` is converted to a GitHub SSH push target without modifying the configured fetch remote.",
-    "Set `GIT_TERMINAL_PROMPT=0` and SSH `BatchMode=yes` for unattended release publishing; authentication failures produce actionable errors instead of blocking the watcher.",
-    "Preserve previously committed-but-unpushed releases: retry `main` and version tag pushes independently of local installation, using the configured SSH agent/key.",
-    "Support `MIXAMO_GIT_PUSH_URL` to override the push destination for custom authorized SSH remotes; keep existing local/bare repositories valid for tests.",
-    "Add Git transport tests and preserve current Flask Studio, Model Library, Blender pipeline, and Ubuntu homepage deployment."
+    "Import a portable `rantlist-profile` JSON in Mixamo Studio to connect to the same Rantlist account using Rantlist r630's existing WebSocket sign-in and 40-minute owner-bound Stage gallery capability.",
+    "Add Local / Rantlist Stage tabs to the collapsible bottom library; browse owner-private remote avatar and model GLBs, preview thumbnails, load animated GLBs in Three.js, and download remote files.",
+    "Add `↑ R` to each local GLB card to publish it to a chosen Rantlist Stage Avatar or Model library, then upload its captured WebP stage thumbnail when it meets Rantlist's preview limit.",
+    "Use the existing owner-scoped `/stage-private/api/assets` Rantlist API, not server filesystem access; honor Rantlist's 20 MiB-per-GLB limit, 60-item library cap, and profile media quota.",
+    "Keep exported profile JSON, account identity, WebSocket capability and private Rantlist asset URLs out of persistent local storage and all release/deployment files; protect all localhost Rantlist gateway requests with the Studio session token.",
+    "Confine outbound gallery traffic to `wss://rantlist.me/ws` and `https://rantlist.me` with strict remote media path checks; do not modify or deploy any Rantlist server, Nginx, or Ubuntu service configuration.",
+    "Warn explicitly that Rantlist r630 allows only one active session per nickname: connecting via Mixamo may sign out an open Rantlist tab and refresh saved profile fields from the exported JSON.",
+    "Add offline contract tests for Rantlist's portable-profile format, ownership capability, media URL allowlist, gallery listing, GLB upload and WebP thumbnail; keep local Flask installation and rollback tests intact."
   ]
 }

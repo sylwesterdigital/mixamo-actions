@@ -43,3 +43,16 @@
 .viewport.library-expanded #guiMount .lil-gui{max-height:calc(100dvh - 360px)}
 @media(max-height:650px){.library-dock{height:153px}.model-thumb{height:63px}.viewport.library-expanded .viewer-bottom{bottom:167px}.viewport.library-expanded .viewer-notice{bottom:215px}.viewport.library-expanded #guiMount .lil-gui{max-height:calc(100dvh - 290px)}}
 @media(max-width:550px){.library-head-actions #libraryHint{display:none}.model-card{flex-basis:145px}.library-dock{height:173px}.model-thumb{height:74px}.viewport.library-expanded .viewer-bottom{bottom:183px}.viewport.library-expanded .viewer-notice{bottom:220px}.viewport #guiMount{max-height:calc(100% - 210px)}}
+
+/* Rantlist Stage: uses the same collapsible gallery dock; no server-side CSS changes. */
+.library-switch{display:flex;align-items:center;border:1px solid #384963;border-radius:6px;overflow:hidden;flex:none}
+.library-head .library-switch button{padding:4px 8px;font-size:10px;letter-spacing:0;font-weight:650}
+.library-switch button.selected{background:#3d5d87;color:#fff}
+.rantlist-file{display:flex;align-items:center;cursor:pointer;white-space:nowrap;border:1px solid #5574a0;border-radius:5px;padding:4px 7px;color:#cddffd;font-size:10px}
+.rantlist-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.library-head-actions #rantlistDisconnect,.library-head-actions #rantlistRefresh{letter-spacing:0;color:#b6cef6}
+.rantlist-account{font-size:10px;padding:3px 14px;color:#a8cbf5;flex:none;border-bottom:1px solid #26364a;max-height:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.library-dock.collapsed .rantlist-account{display:none}
+.model-card-actions button{font-size:11px}
+@media(max-width:1180px){.library-head-actions #libraryHint{display:none}}
+@media(max-width:730px){.library-head{padding:0 7px}.library-head-actions{gap:4px}.library-head .library-switch button{padding:4px 5px}.rantlist-file{padding:3px 5px;font-size:9px}.library-head-actions #captureCurrent{display:none}}

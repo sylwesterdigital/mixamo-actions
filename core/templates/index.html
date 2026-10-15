@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.1.1</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.0</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -58,9 +58,18 @@
     <section id="libraryDock" class="library-dock" aria-label="Model library">
       <div class="library-head">
         <button id="libraryToggle" type="button" title="Collapse / expand model library" aria-expanded="true"><span id="libraryChevron">▾</span> MODEL LIBRARY <span id="libraryCount">0</span></button>
-        <div class="library-head-actions"><span id="libraryHint">Completed builds are saved automatically</span><button type="button" id="captureCurrent" title="Refresh the selected model thumbnail from the stage" disabled>▣ Capture</button></div>
+        <div class="library-head-actions">
+          <div class="library-switch" role="group" aria-label="Gallery source"><button id="galleryLocal" class="selected" type="button">Local</button><button id="galleryRantlist" type="button">Rantlist Stage <span id="rantlistCount"></span></button></div>
+          <span id="libraryHint">Completed builds are saved automatically</span>
+          <button type="button" id="captureCurrent" title="Refresh selected local model thumbnail from stage" disabled>▣ Capture</button>
+          <label class="rantlist-file" id="rantlistImportLabel" title="Connect Rantlist using a profile export">↥ Connect profile<input id="rantlistProfileFile" type="file" accept=".json,application/json"/></label>
+          <button id="rantlistRefresh" type="button" class="hidden" title="Refresh Rantlist Stage gallery">↻</button>
+          <button id="rantlistDisconnect" type="button" class="hidden" title="Disconnect from Rantlist">Disconnect</button>
+        </div>
       </div>
+      <div id="rantlistAccountBar" class="rantlist-account hidden" role="status"></div>
       <div id="libraryCards" class="library-cards"><p class="library-empty">Your finished models will appear here.</p></div>
+      <div id="rantlistCards" class="library-cards hidden"><p class="library-empty">Import a Rantlist profile JSON to browse your private Stage gallery.</p></div>
     </section>
     <div id="consoleDrawer" class="console-drawer hidden"><div class="console-header">PIPELINE LOG <button type="button" id="closeConsole">×</button></div><pre id="consoleText">No job activity yet.</pre></div>
     <div id="guiMount"></div>
@@ -69,6 +78,7 @@
 </div>
 <script id="bootstrap" type="application/json">{{ {'token':token,'presets':presets,'session':session,'workspace':workspace}|tojson }}</script>
 <script defer src="{{ url_for('static', filename='studio.js') }}"></script>
+<script defer src="{{ url_for('static', filename='rantlist.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='viewer.mjs') }}"></script>
 <script src="{{ url_for('static', filename='release-watch.js') }}" defer></script>
 </body></html>

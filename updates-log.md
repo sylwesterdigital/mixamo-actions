@@ -1,5 +1,28 @@
 # Mixamo Studio — update log
 
+## v1.2.0 — Rantlist Stage gallery integration (2026-10-15)
+- Import a portable `rantlist-profile` JSON in Mixamo Studio to connect to the same Rantlist account using Rantlist r630's existing WebSocket sign-in and 40-minute owner-bound Stage gallery capability.
+- Add Local / Rantlist Stage tabs to the collapsible bottom library; browse owner-private remote avatar and model GLBs, preview thumbnails, load animated GLBs in Three.js, and download remote files.
+- Add `↑ R` to each local GLB card to publish it to a chosen Rantlist Stage Avatar or Model library, then upload its captured WebP stage thumbnail when it meets Rantlist's preview limit.
+- Use the existing owner-scoped `/stage-private/api/assets` Rantlist API, not server filesystem access; honor Rantlist's 20 MiB-per-GLB limit, 60-item library cap, and profile media quota.
+- Keep exported profile JSON, account identity, WebSocket capability and private Rantlist asset URLs out of persistent local storage and all release/deployment files; protect all localhost Rantlist gateway requests with the Studio session token.
+- Confine outbound gallery traffic to `wss://rantlist.me/ws` and `https://rantlist.me` with strict remote media path checks; do not modify or deploy any Rantlist server, Nginx, or Ubuntu service configuration.
+- Warn explicitly that Rantlist r630 allows only one active session per nickname: connecting via Mixamo may sign out an open Rantlist tab and refresh saved profile fields from the exported JSON.
+- Add offline contract tests for Rantlist's portable-profile format, ownership capability, media URL allowlist, gallery listing, GLB upload and WebP thumbnail; keep local Flask installation and rollback tests intact.
+
+## v1.1.3 — 2026-10-15
+
+- Remove the misleading Nginx/HTTPS configuration warning after successful homepage deployment. Existing server configuration is never modified.
+- Restrict server deployment to five allowlisted static files in the existing `/var/www/mojoworks/labs/mixamo-actions/` directory; exclude `.htaccess` and all server configuration files.
+- Refuse to create a missing destination, follow a symlinked destination/asset, or change remote permissions, ownership, or other applications.
+
+- Correct Ubuntu SSH deployment endpoint from the supplied Rantlist `deploy.sh`: `root@yolo.cx` on port `18021`, replacing the mistaken `root@mail:22` defaults.
+- Automatically map only the previously shipped legacy `root@mail:22` pair when publishing, without changing an existing private `mixamo-watch.env` or overriding customized endpoints.
+- Add `./ops/deploy-homepage.sh --show-target` to verify the effective SSH host, port and remote folder without opening a network connection.
+- Preserve environment-variable priority over the private config and retain automatic retry of homepage publication without reinstalling Flask or republishing the Git tag.
+- Preserve the existing Flask Studio, model gallery and single combined animation GLB exporter unchanged.
+
+
 ## v1.1.2 — 2026-10-15
 
 - Fix `Username for https://github.com`: GitHub HTTPS `origin` is converted to a GitHub SSH push target without modifying the configured fetch remote.

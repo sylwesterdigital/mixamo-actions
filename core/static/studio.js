@@ -217,7 +217,9 @@ function renderLibrary(){
       try{await send('/api/library/'+model.id,{method:'DELETE'});if(librarySelection===model.id){librarySelection=null;rememberLibrarySelection();}await refreshLibrary();}
       catch(e){showViewerNotice(e.message,true);}
     };
-    tools.append(download,remove);card.append(open,tools);host.append(card);
+    const publish=document.createElement('button');publish.type='button';publish.title='Publish this GLB to your private Rantlist Stage gallery';publish.textContent='↑ R';publish.setAttribute('aria-label','Publish '+model.name+' to Rantlist');
+    publish.onclick=()=>window.RantlistStudio?.publish(model.id);
+    tools.append(publish,download,remove);card.append(open,tools);host.append(card);
   }
 }
 async function captureForLibrary(id){

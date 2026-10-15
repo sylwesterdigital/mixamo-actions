@@ -23,7 +23,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.1.2.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.1.3.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -31,13 +31,13 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.1.2.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.1.3.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
 For systems where the **v1.0.0 update failed** (its old tests and installer are still present), apply the updater fix once from the already-saved versioned release ZIP. Then start the normal watcher:
 
 ```zsh
 cd /Users/smielniczuk/Documents/works/mixamo-actions
-unzip -o updates/mixamo-actions-v1.1.2.zip ops/install_release.py mixamo-studio-watch.sh
+unzip -o updates/mixamo-actions-v1.1.3.zip ops/install_release.py mixamo-studio-watch.sh
 chmod +x mixamo-studio-watch.sh
 ./mixamo-studio-watch.sh --once
 ./mixamo-studio-watch.sh
@@ -62,7 +62,7 @@ Open the local Studio at http://127.0.0.1:5055. The browser tab reports new vers
 cp mixamo-watch.env.example mixamo-watch.env
 ```
 
-This sets `MIXAMO_DEPLOY_TARGET=root@mail`. Ensure your SSH keys allow access and `root@mail` is reachable. Repository push uses the *existing* `origin` remote, `main` branch, and your local Git credentials; no password or token is placed in source.
+This defaults to `MIXAMO_DEPLOY_TARGET=root@yolo.cx` and `MIXAMO_DEPLOY_PORT=18021`, as specified in the supplied Rantlist `deploy.sh`. The updater also recognizes the previous mistaken `root@mail:22` configuration without changing private local settings. Repository push uses the *existing* `origin` remote, `main` branch, and your local Git credentials; no password or token is placed in source.
 
 **Continuous watcher with GitHub publishing enabled (from the repo root):**
 
@@ -105,16 +105,17 @@ The builder writes the ZIP directly into this repository’s `updates/` director
 The static homepage lives in `site/`; by default the deploy script publishes into `/var/www/mojoworks/labs/mixamo-actions` over SSH:
 
 ```zsh
+./ops/deploy-homepage.sh --show-target
 ./ops/deploy-homepage.sh --dry-run
 ./ops/deploy-homepage.sh
 ```
 
-An existing Nginx server block must map the website URL to that directory; see `ops/nginx-location.example.conf`. The site does **not** expose Flask, Playwright, Adobe login sessions or character uploads to the Internet.
+The existing server site mapping is left untouched. Deployment copies only five static assets into the already-provisioned directory, never modifies Nginx/HTTPS or any server service, and does **not** expose Flask, Playwright, Adobe login sessions or character uploads to the Internet.
 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.1.2.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.1.3.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -127,7 +128,7 @@ The local control panel listens on `127.0.0.1` and requires a token for mutating
 
 The watcher records **installation**, **Git publication**, and **homepage publication** separately under `updates/.state/`. A failed Git push or remote deploy never changes the successful installation marker. The persistent watcher retries pending publication without reinstalling the app (with a short retry cooldown). Run `./mixamo-studio-watch.sh --once` to attempt a single immediate publish cycle.
 
-Git requires `origin`, `main`, and your configured user identity. The watcher stages only files listed by `release.json` and checks their SHA-256 hashes. The homepage requires `MIXAMO_DEPLOY_TARGET` and an existing SSH/rsync connection; the optional Nginx route must be configured on Ubuntu. No push or remote deploy occurs unless the corresponding settings are enabled.
+Git requires `origin`, `main`, and your configured user identity. The watcher stages only files listed by `release.json` and checks their SHA-256 hashes. The homepage requires `MIXAMO_DEPLOY_TARGET` and an existing SSH/rsync connection; the existing website routing is left unchanged. No push or remote deploy occurs unless the corresponding settings are enabled.
 
 ## Model Library (v1.1.0)
 
@@ -152,5 +153,15 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.1.2.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.1.3.zip ops/install_release.py`,
 and restart the watcher from the repository root.
+
+### Rantlist Stage integration (v1.2.0)
+
+Mixamo Studio runs locally at `http://127.0.0.1:5055`. In the collapsible **Model Library**, choose **Rantlist Stage**, then **Connect profile** and select the **JSON exported from your own Rantlist profile**. The JSON is parsed and used only in process memory, never saved to the Mixamo workspace, never committed to GitHub, and never uploaded to the static homepage. Treat the exported JSON like a sensitive sign-in credential: Rantlist r630 signs users in by their exported identity UUID.
+
+**Important Rantlist compatibility detail:** Rantlist r630 maintains only one active WebSocket session for each nickname. Connecting Mixamo can sign out your Rantlist browser tab; close/sign out that tab first if you need an uninterrupted Mixamo session. Rantlist also persists profile metadata when signing in, so **use a fresh exported JSON** to avoid replacing newer profile fields with stale backup metadata. This is a limitation of the existing Rantlist authentication protocol, not an OAuth flow.
+
+After connection, the **Rantlist Stage** gallery shows your private Avatar and Model GLBs. Load a remote model into Three.js, download it, or delete the remote asset (after confirmation). In the **Local** gallery, click **↑ R** on a model card and choose `avatar` or `model` to publish the combined GLB to the respective Rantlist Stage library. Thumbnail upload is attempted if the captured local WebP is 192 KiB or smaller. Rantlist limits each GLB to **20 MiB**, uses a shared Stage gallery limit of **60 items**, and applies the account's ordinary upload quota. Oversize GLBs need optimizing before publishing. New Rantlist assets remain **owner-private**; they are available to others in Stage only when used as an explicitly shared/selected Stage asset, not as a public asset directory.
+
+The integration reuses the already deployed Rantlist r630 API, `wss://rantlist.me/ws` and `https://rantlist.me/stage-private/api/assets`. Its WebSocket capability is kept in local Flask process memory and expires when the session disconnects. It opens the Rantlist socket without a cross-origin browser WebSocket, since Rantlist r630 rejects foreign WebSocket origins. The local gateway is protected by the ephemeral `X-Local-Token`. A Flask restart requires importing the profile again. **No Rantlist source, Ubuntu files, Nginx, services, or static deploy destination are changed.**

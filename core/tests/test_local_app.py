@@ -8,6 +8,7 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -42,6 +43,33 @@ class FlaskLocalTests(unittest.TestCase):
         notification = self.client.get('/static/release-watch.js', headers={'Host': '127.0.0.1:5055'})
         self.assertEqual(notification.status_code, 200)
         self.assertIn(b'Reload studio', notification.data)
+
+    def test_rantlist_gallery_routes_are_token_protected(self):
+        forbidden = self.client.get('/api/rantlist/assets',headers={'Host':'127.0.0.1:5055'})
+        self.assertEqual(forbidden.status_code,403)
+        self.assertEqual(self.client.post('/api/rantlist/connect',data=b'{}',
+            headers={'Host':'127.0.0.1:5055'}).status_code,403)
+
+    def test_rantlist_remote_listing_and_upload_from_local_library(self):
+        with patch.object(self.mod.RANTLIST_BRIDGE,'list_assets',return_value={'items':[], 'maxItems':60}):
+            result=self.client.get('/api/rantlist/assets',headers=self.headers)
+            self.assertEqual(result.status_code,200)
+            self.assertEqual(result.json['items'],[])
+        import hashlib
+        uid=hashlib.sha256(b'test').hexdigest()[:24]
+        source=Path(self.temp.name)/'combined.glb'
+        source.write_bytes(b'glTF'+b'\0'*128)
+        with self.mod.LIBRARY_LOCK:
+            original=self.mod._load_library()
+            self.mod._save_library(original+[{'id':uid,'name':'Test dancer','path':str(source),'source':'generated','created':'now'}])
+        try:
+            with patch.object(self.mod.RANTLIST_BRIDGE,'publish',return_value={'id':'a'*32,'kind':'avatar','thumbnailSaved':False}) as publish:
+                result=self.client.post('/api/rantlist/publish/'+uid,json={'kind':'avatar'},headers=self.headers)
+                self.assertEqual(result.status_code,200)
+                self.assertEqual(publish.call_args.kwargs['glb'][:4],b'glTF')
+                self.assertEqual(publish.call_args.kwargs['name'],'Test dancer')
+        finally:
+            with self.mod.LIBRARY_LOCK:self.mod._save_library(original)
 
     def test_post_requires_token(self):
         response = self.client.post('/api/jobs', headers={'Host': '127.0.0.1:5055'})

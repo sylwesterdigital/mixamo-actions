@@ -7,6 +7,7 @@ signed-in Brave profile. It is deliberately a single-job LOCAL desktop app.
 from __future__ import annotations
 
 from collections import deque
+from io import BytesIO
 from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
@@ -24,6 +25,7 @@ import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
+from rantlist_bridge import RantlistBridge, RantlistError, MAX_MODEL
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_FILE = ROOT.parent / "release.json"
@@ -45,6 +47,7 @@ app.config['MAX_CONTENT_LENGTH'] = 1250 * 1024 * 1024
 app.config['JSON_SORT_KEYS'] = False
 STATE_LOCK = Lock()
 STATE = {'job': None}
+RANTLIST_BRIDGE = RantlistBridge()  # No imported profiles/tokens written to disk.
 
 
 def now():
@@ -60,7 +63,7 @@ def local_access_only():
     host = request.host.split(':')[0].lower()
     if host not in {'127.0.0.1', 'localhost', '[::1]'}:
         abort(403)
-    if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith('/api/rantlist/'):
         if request.headers.get('X-Local-Token') != APP_TOKEN:
             abort(403)
 
@@ -590,6 +593,82 @@ def preview_result(job_id):
         abort(404)
     return send_file(path, mimetype='model/gltf-binary', as_attachment=False,
                      conditional=True)
+
+
+@app.errorhandler(RantlistError)
+def rantlist_error(exc):
+    return respond_error(str(exc), exc.status)
+
+
+@app.post('/api/rantlist/connect')
+def rantlist_connect():
+    """Import a portable profile only into transient memory; never store its JSON."""
+    from rantlist_bridge import parse_portable_profile
+    if request.content_length is None or request.content_length > 2 * 1024 * 1024:
+        return respond_error('Profile JSON must be smaller than 2 MiB.', 413)
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        return respond_error('Invalid profile JSON.')
+    return jsonify(RANTLIST_BRIDGE.connect(parse_portable_profile(payload)))
+
+
+@app.get('/api/rantlist/status')
+def rantlist_status():
+    return jsonify(RANTLIST_BRIDGE.status())
+
+
+@app.post('/api/rantlist/disconnect')
+def rantlist_disconnect():
+    RANTLIST_BRIDGE.close()
+    return jsonify(ok=True)
+
+
+@app.get('/api/rantlist/assets')
+def rantlist_assets():
+    return jsonify(RANTLIST_BRIDGE.list_assets())
+
+
+@app.get('/api/rantlist/assets/<asset_id>/<format>')
+def rantlist_asset(asset_id, format):
+    if format not in ('glb','download','thumbnail'):
+        abort(404)
+    payload, _mime = RANTLIST_BRIDGE.asset(asset_id, 'thumbnail' if format=='thumbnail' else 'glb')
+    mimetype = 'image/webp' if format=='thumbnail' else 'model/gltf-binary'
+    return send_file(BytesIO(payload), mimetype=mimetype,
+                     as_attachment=format=='download',
+                     download_name=f'rantlist-{asset_id}.glb' if format=='download' else None,
+                     max_age=0)
+
+
+@app.post('/api/rantlist/publish/<library_id>')
+def rantlist_publish(library_id):
+    """Publish an existing local-library GLB to the authenticated owner's gallery.
+
+    Never accept arbitrary filenames, server destinations, or arbitrary upload URLs.
+    """
+    kind = (request.get_json(silent=True) or {}).get('kind','avatar')
+    if not re.fullmatch(r'[a-f0-9]{24,32}', library_id):
+        abort(404)
+    with LIBRARY_LOCK:
+        entry = next((e for e in _load_library() if e.get('id')==library_id), None)
+    if not entry:
+        abort(404)
+    candidate = Path(entry['path']).expanduser().resolve()
+    if not candidate.is_file() or candidate.suffix.lower()!='.glb':
+        return respond_error('The saved GLB is no longer available.',404)
+    size = candidate.stat().st_size
+    if size > MAX_MODEL:
+        return respond_error('Rantlist accepts GLB files no larger than 20 MiB. Optimize the model first.',413)
+    glb = candidate.read_bytes()
+    thumb = LIBRARY_THUMBS / (library_id+'.webp')
+    thumbnail = thumb.read_bytes() if thumb.is_file() and thumb.stat().st_size <= 192 * 1024 else None
+    return jsonify(RANTLIST_BRIDGE.publish(glb=glb, name=entry.get('name','Mixamo model'), kind=kind, thumbnail=thumbnail))
+
+
+@app.delete('/api/rantlist/assets/<asset_id>')
+def rantlist_delete_asset(asset_id):
+    return jsonify(RANTLIST_BRIDGE.delete(asset_id))
 
 
 @app.get('/collector.js')
