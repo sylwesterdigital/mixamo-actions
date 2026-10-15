@@ -23,4 +23,18 @@ class GalleryUIContractTests(unittest.TestCase):
         self.assertIn('IntersectionObserver',gallery)
         self.assertIn('previewActive<3',gallery)
         self.assertIn('Preview unavailable',gallery)
+    def test_gallery_sizes_aspects_and_overlays_and_log_copy(self):
+        markup=(ROOT/'templates/index.html').read_text()
+        js=(ROOT/'static/studio.js').read_text()
+        remote=(ROOT/'static/rantlist.js').read_text()
+        css=(ROOT/'static/studio.css').read_text()
+        for key in ('xl','m','s'): self.assertIn('data-gallery-size="'+key+'"',markup)
+        for key in ('square','portrait','landscape'): self.assertIn('data-gallery-ratio="'+key+'"',markup)
+        for name in ('copyConsole','downloadConsole'): self.assertIn(name,markup)
+        self.assertIn('fullDiagnosticReport',js)
+        self.assertIn('--card-ratio',css)
+        self.assertIn('object-fit:contain',css)
+        self.assertIn('model-card-label',css)
+        self.assertNotIn('Stage avatar',remote)
+
 if __name__=='__main__':unittest.main()

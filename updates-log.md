@@ -1,3 +1,20 @@
+## v1.2.4 — 2026-10-15
+
+- Fix the Flask Rantlist publish regression test that accidentally contacted the live private gallery without a test session, causing an expected HTTP 401 and aborting v1.2.3 installation.
+- Keep mocked Stage gallery capacity active for both listing and upload assertions; verify the local GLB name, selected destination and upload payload without any network access.
+- Add independent tests for full 60-item Stage quota rejection (409, no upload) and unauthenticated Rantlist sessions (401, no upload).
+- Preserve v1.2.3 gallery size/aspect controls, diagnostics, resumable pipeline, Rantlist API implementation, SSH publishing and isolated static-only server deployment unchanged.
+
+## v1.2.3 — 2026-10-15
+
+- Add compact gallery XL/M/S card sizes and 1:1, 2:3, and 3:2 aspect modes, remembered locally.
+- Present entire preview images with model names and small action buttons overlaid; remove redundant Stage avatar labels.
+- Display the true Rantlist Stage capacity including floors and environments, and refuse uploads locally when the 60-item library is full.
+- Distinguish gallery quota errors (409) from genuinely oversized GLB files (413); retain existing authenticated HTTPS uploads rather than changing the multiplayer WebSocket protocol.
+- Add copyable and downloadable full build/API/WebSocket diagnostics with credential-free request route, result, timing and connection-status history.
+- Diagnose Mixamo download timeouts with local screenshots and selected UI state; never blindly double-click download or lose completed resumable FBXs.
+- Preserve gallery models, dedicated Brave sessions, Rantlist account isolation and the strict static-only Ubuntu deployment boundary.
+
 ## v1.2.2 — 2026-10-15
 
 - Repair Rantlist thumbnail display: preserve the remote JPG/PNG/WebP MIME type, bound requests to three visible thumbnails, and show a clean fallback instead of broken images.

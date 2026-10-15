@@ -1,11 +1,9 @@
 {
-  "version": "1.2.2",
+  "version": "1.2.4",
   "changes": [
-    "Repair Rantlist thumbnail display: preserve the remote JPG/PNG/WebP MIME type, bound requests to three visible thumbnails, and show a clean fallback instead of broken images.",
-    "Make the bottom Model Library vertically resizable by dragging its top handle, with multiple scrollable rows and keyboard resizing support.",
-    "Replace the confusing avatar/model text prompt with a dedicated publish dialog; prefill the filename from the saved GLB name and offer explicit Avatar and Model choices.",
-    "Show upload-in-progress status, elapsed time without fabricated percent-complete, and persistent confirmed success or detailed failure for every Rantlist upload.",
-    "Report a separate Stage-preview upload failure without incorrectly marking a successfully uploaded GLB as failed.",
-    "Preserve local models, private Rantlist identity isolation, Git/SSH publishing, and the static-only Ubuntu deployment boundary; no Rantlist server or Nginx changes."
+    "Fix the Flask Rantlist publish regression test that accidentally contacted the live private gallery without a test session, causing an expected HTTP 401 and aborting v1.2.3 installation.",
+    "Keep mocked Stage gallery capacity active for both listing and upload assertions; verify the local GLB name, selected destination and upload payload without any network access.",
+    "Add independent tests for full 60-item Stage quota rejection (409, no upload) and unauthenticated Rantlist sessions (401, no upload).",
+    "Preserve v1.2.3 gallery size/aspect controls, diagnostics, resumable pipeline, Rantlist API implementation, SSH publishing and isolated static-only server deployment unchanged."
   ]
 }

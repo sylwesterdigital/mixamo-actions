@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.2</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.4</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -61,7 +61,10 @@
         <button id="libraryToggle" type="button" title="Collapse / expand model library" aria-expanded="true"><span id="libraryChevron">▾</span> MODEL LIBRARY <span id="libraryCount">0</span></button>
         <div class="library-head-actions">
           <div class="library-switch" role="group" aria-label="Gallery source"><button id="galleryLocal" class="selected" type="button">Local</button><button id="galleryRantlist" type="button">Rantlist Stage <span id="rantlistCount"></span></button></div>
-          <span id="libraryHint">Completed builds are saved automatically</span>
+          <div class="gallery-controls" aria-label="Gallery card layout">
+            <div class="gallery-control-group" role="group" aria-label="Card size"><button type="button" data-gallery-size="xl" title="Extra large cards">XL</button><button type="button" data-gallery-size="m" title="Medium cards">M</button><button type="button" data-gallery-size="s" title="Small cards">S</button></div>
+            <div class="gallery-control-group" role="group" aria-label="Card proportions"><button type="button" data-gallery-ratio="square" title="Square (1:1)">1:1</button><button type="button" data-gallery-ratio="portrait" title="Portrait (2:3)">2:3</button><button type="button" data-gallery-ratio="landscape" title="Landscape (3:2)">3:2</button></div>
+          </div><span id="libraryHint">Completed builds are saved automatically</span>
           <button type="button" id="captureCurrent" title="Refresh selected local model thumbnail from stage" disabled>▣ Capture</button>
           <label class="rantlist-file" id="rantlistImportLabel" title="Connect Rantlist using a profile export">↥ Connect profile<input id="rantlistProfileFile" type="file" accept=".json,application/json"/></label>
           <button id="rantlistRefresh" type="button" class="hidden" title="Refresh Rantlist Stage gallery">↻</button>
@@ -92,7 +95,7 @@
         </div>
       </div>
     </div>
-    <div id="consoleDrawer" class="console-drawer hidden"><div class="console-header">PIPELINE LOG <button type="button" id="closeConsole">×</button></div><pre id="consoleText">No job activity yet.</pre></div>
+    <div id="consoleDrawer" class="console-drawer hidden"><div class="console-header"><span>PIPELINE &amp; API DIAGNOSTICS</span><div class="console-tools"><button type="button" id="copyConsole" title="Copy pipeline log and API diagnostics">Copy</button><button type="button" id="downloadConsole" title="Download diagnostic report">↓ .txt</button><button type="button" id="closeConsole" title="Close diagnostics">×</button></div></div><pre id="consoleText">No job activity yet.</pre></div>
     <div id="guiMount"></div>
   </main>
 </div>

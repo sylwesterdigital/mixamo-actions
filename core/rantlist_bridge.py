@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import deque
 import ssl
 import threading
 import time
@@ -83,9 +84,20 @@ class RantlistBridge:
         self.identity_id = None
         self.error = None
         self.session_generation = 0
+        self.events = deque(maxlen=100)  # Only fixed event labels; no private payloads.
         self.opener = build_opener(NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
         self._catalog_cache = None
         self._catalog_expires = 0
+
+    def _event(self, label):
+        # No usernames, identity IDs, access tokens, query strings or WS frames.
+        with self.lock:
+            self.events.append({'at':time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                                'event':label})
+
+    def diagnostics(self):
+        with self.lock:
+            return list(self.events)
 
     def close(self):
         with self.lock:
@@ -100,6 +112,7 @@ class RantlistBridge:
             self._catalog_cache = None
             self._catalog_expires = 0
         if ws is not None:
+            self._event('disconnected')
             try: ws.close()
             except Exception: pass
 
@@ -164,6 +177,7 @@ class RantlistBridge:
             # Refresh the public version *once* without looping on auth failures.
             for attempt in range(2):
                 versions = version_fetcher()
+                self._event('connect_attempt')
                 ws = socket_factory(self._versioned_ws_url(versions))
                 # The identity credential is sent only after the secure WS upgrade.
                 ws.send(json.dumps({'type': 'hello', **profile}, separators=(',', ':')))
@@ -182,6 +196,7 @@ class RantlistBridge:
                         if actual.get('identityId') != profile['identityId']:
                             raise RantlistError('Rantlist returned a different identity.', 403)
                         got_hello = True
+                        self._event('identity_accepted')
                         ws.send('{"type":"stage.asset.authorize"}')
                     elif packet.get('type') == 'stage.asset.access' and got_hello:
                         token = packet.get('token')
@@ -196,11 +211,13 @@ class RantlistBridge:
                             self.ws, self.token, self.expiry = ws, token, expiry
                             self.nickname, self.identity_id = profile['nickname'], profile['identityId']
                             generation = self.session_generation
+                        self._event('stage_access_granted')
                         ws.settimeout(8)
                         threading.Thread(target=self._reader, args=(ws, generation), daemon=True).start()
                         return self.status()
                     elif packet.get('type') == 'error':
                         if packet.get('code') == 'client_update_required':
+                            self._event('client_version_mismatch')
                             version_changed = True
                             break
                         raise RantlistError('Rantlist refused sign-in: ' + str(packet.get('message') or packet.get('code') or 'Access denied')[:180], 403)
@@ -254,6 +271,7 @@ class RantlistBridge:
                 if self.ws is ws and self.session_generation == generation:
                     self.ws, self.token, self.expiry, self.identity_id = None, None, 0, None
                     self.error = 'Rantlist connection closed. Import your profile again to reconnect.'
+                    self._event('connection_closed')
                     self.nickname = None
 
     def _http(self, path: str, *, method='GET', data=None, media_type=None, max_bytes=MAX_MODEL+65536):
@@ -277,7 +295,10 @@ class RantlistBridge:
         except HTTPError as exc:
             try: info = json.loads(exc.read(8192)); msg = str(info.get('error') or info.get('code') or 'Rantlist rejected the request')[:240]
             except (ValueError, TypeError): msg = 'Rantlist rejected the request'
-            raise RantlistError(msg, exc.code if 400 <= exc.code < 500 else 502) from exc
+            status = exc.code if 400 <= exc.code < 500 else 502
+            if status == 413 and '60-item' in msg.lower():
+                status = 409  # capacity conflict, not a too-large GLB
+            raise RantlistError(msg, status) from exc
         except (OSError, URLError) as exc:
             raise RantlistError('Rantlist is currently unreachable over HTTPS.', 502) from exc
 
@@ -313,7 +334,15 @@ class RantlistBridge:
             items.append({'id':value['id'], 'kind':value['kind'], 'name':str(value.get('name') or 'Avatar')[:80],
                           'size':int(value.get('size') or 0), 'updatedAt':value.get('updatedAt'),
                           'thumbnail':bool(value.get('thumbnailUrl'))})
-        return {'items':items, 'storage':result.get('storage'), 'maxItems':result.get('maxItems',60)}
+        storage = result.get('storage') if isinstance(result.get('storage'), dict) else {}
+        # Rantlist's 60-item quota counts ALL Stage asset types, not just GLBs.
+        # This list includes *all* private Stage kinds. storage.fileCount also
+        # counts other Rantlist user uploads and is NOT the Stage asset quota.
+        count = len(result['items'])
+        maximum = result.get('maxItems', 60)
+        if type(maximum) is not int or maximum < 1: maximum = 60
+        return {'items':items, 'storage':storage, 'maxItems':maximum,
+                'usedItems':count, 'capacityKnown':True}
 
     def _asset_path(self, asset_id, which):
         if not ASSET_ID.fullmatch(str(asset_id)): raise RantlistError('Invalid Rantlist model ID.')

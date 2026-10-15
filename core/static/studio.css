@@ -89,3 +89,27 @@
 .rantlist-publish-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
 .rantlist-publish-dialog input:disabled,.rantlist-publish-dialog button:disabled{opacity:.6}
 @media(prefers-reduced-motion:reduce){.rantlist-publish-status.busy::before{animation-duration:2s}}
+
+/* v1.2.3: portrait-first, overlay cards with full uncropped preview and compact view controls. */
+.gallery-controls{display:flex;gap:5px;align-items:center;flex:none}
+.gallery-control-group{display:flex;gap:1px;border:1px solid #3a4d68;border-radius:5px;padding:2px;background:#10192a}
+.library-head .gallery-control-group button{padding:2px 5px;min-width:21px;font:700 10px ui-monospace,monospace;letter-spacing:0;color:#8ea9ca;border-radius:3px}
+.library-head .gallery-control-group button.selected{background:#4a6fa8;color:#fff}
+.library-cards{grid-template-columns:repeat(auto-fill,minmax(min(var(--card-width,164px),100%),1fr));grid-auto-rows:auto;align-items:start;gap:10px}
+.model-card{height:auto;aspect-ratio:var(--card-ratio,2 / 3);min-height:0;isolation:isolate;background:#18283e}
+.model-card-main{display:block;position:absolute;inset:0;overflow:hidden}
+.model-thumb{position:absolute;inset:0;height:100%;width:100%;display:grid;place-items:center;background:radial-gradient(circle at 50% 52%,#354865,#18243a 75%);overflow:hidden}
+.model-thumb img{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
+.model-card-label{position:absolute;z-index:1;top:0;left:0;right:0;max-width:100%;padding:11px 8px 22px;pointer-events:none;background:linear-gradient(to bottom,#07121fe8,transparent);color:#fff}
+.model-card-label strong{display:block;line-height:1.2;font-weight:750;font-size:12px;text-shadow:0 1px 2px #000d}
+.model-card-label small{display:none}
+.model-card-actions{z-index:3;bottom:6px;right:6px;display:flex;gap:4px}
+.model-card-actions button,.model-card-actions a{display:grid;place-items:center;height:27px;min-width:27px;padding:0 5px;background:#101d31e8;border:1px solid #6a87ad;color:#e5f0ff;border-radius:5px;font-size:11px;font-weight:800}
+.model-card-actions button:hover,.model-card-actions a:hover{background:#47618a;color:white}
+.library-head-actions{gap:6px}
+@media(max-width:1080px){.gallery-controls{gap:2px}.library-head .gallery-control-group button{padding:2px 3px}}
+@media(max-width:730px){.gallery-controls{position:absolute;right:9px;top:40px;z-index:2;background:#141e30f2;padding:3px;border-radius:5px}.library-head{height:36px}.library-dock:not(.collapsed) .library-cards{padding-top:23px}}
+.console-tools{display:flex;align-items:center;gap:4px}
+.console-header .console-tools button{font-size:11px;border:1px solid #3e5777;border-radius:4px;background:#1a2a41;padding:4px 7px;letter-spacing:0}
+.console-header .console-tools button:last-child{font-size:18px;padding:1px 8px}
+.console-drawer{height:min(380px,55vh);width:min(740px,calc(100% - 28px));z-index:12}

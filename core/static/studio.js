@@ -8,6 +8,27 @@ let sourceMode = 'path', presetMode = 'saved', cursor = 0, jobID = null;
 let logArr = [], lastAutoPreview = null, activeJob = null, updatePending = false;
 let libraryModels=[], librarySelection=null, openedLocalFile=null, libraryExpanded=true;
 const getViewer = () => window.MixamoViewer;
+const gallerySizes={s:112,m:164,xl:228};
+const galleryRatios={square:'1 / 1',portrait:'2 / 3',landscape:'3 / 2'};
+let gallerySize='m',galleryRatio='portrait';
+try{
+  const prefs=JSON.parse(localStorage.getItem('mixamo-gallery-layout')||'{}');
+  if(Object.hasOwn(gallerySizes,prefs.size))gallerySize=prefs.size;
+  if(Object.hasOwn(galleryRatios,prefs.ratio))galleryRatio=prefs.ratio;
+}catch{}
+function setGalleryLayout(size=gallerySize,ratio=galleryRatio){
+  if(!Object.hasOwn(gallerySizes,size)||!Object.hasOwn(galleryRatios,ratio))return;
+  gallerySize=size;galleryRatio=ratio;
+  const dock=$('libraryDock');
+  dock.style.setProperty('--card-width',gallerySizes[size]+'px');
+  dock.style.setProperty('--card-ratio',galleryRatios[ratio]);
+  for(const b of document.querySelectorAll('[data-gallery-size]')){b.classList.toggle('selected',b.dataset.gallerySize===size);b.setAttribute('aria-pressed',String(b.dataset.gallerySize===size));}
+  for(const b of document.querySelectorAll('[data-gallery-ratio]')){b.classList.toggle('selected',b.dataset.galleryRatio===ratio);b.setAttribute('aria-pressed',String(b.dataset.galleryRatio===ratio));}
+  try{localStorage.setItem('mixamo-gallery-layout',JSON.stringify({size,ratio}));}catch{}
+}
+for(const b of document.querySelectorAll('[data-gallery-size]'))b.onclick=()=>setGalleryLayout(b.dataset.gallerySize,galleryRatio);
+for(const b of document.querySelectorAll('[data-gallery-ratio]'))b.onclick=()=>setGalleryLayout(gallerySize,b.dataset.galleryRatio);
+setGalleryLayout();
 const storeKey = 'mixamo-studio-config-v1';
 const fields = ['characterPath','presetPathInput','blender','draco','webp','timeout','port'];
 const checks = {skip_upload:'skipUpload',skip_download:'skipDownload',confirm_upload:'confirmUpload',require_textures:'requireTextures',no_draco:'noDraco',no_webp:'noWebp',continue_on_error:'continueOnError',dry_run:'dryRun'};
@@ -43,6 +64,7 @@ try{
 for(const id of [...fields,...Object.values(checks),'presetSelect'])$(id).addEventListener('change',storeSettings);
 async function send(url,opts={}) {
   const result=await fetch(url,{...opts,headers:{...(opts.headers||{}),'X-Local-Token':TOKEN}});
+  if(result.status>=400)window.MixamoDiagnostics?.record(opts.method||'GET',url,result.status);
   let data; try{data=await result.json();}catch{throw new Error(`Unexpected server response (${result.status})`);}
   if(!result.ok)throw new Error(data.error||`HTTP ${result.status}`);
   return data;
@@ -88,8 +110,60 @@ $('start').onclick=async()=>{
 };
 $('cancel').onclick=async()=>{try{await send('/api/jobs/cancel',{method:'POST'});feedback('Cancellation requested',true);}catch(e){feedback(e.message);}};
 const consoleState = $('consoleDrawer');
-$('toggleConsole').onclick=()=>consoleState.classList.toggle('hidden');
+const callLog=[];
+window.MixamoDiagnostics={record(method,route,status){
+  // Route and status only. Never include query strings, profile IDs, UUIDs or tokens.
+  const safe=String(route).split('?')[0].replace(/\b[a-f0-9]{24,}\b/gi,':id');
+  callLog.push(`${new Date().toISOString()} ${method} ${safe} → ${status}`);
+  if(callLog.length>250)callLog.splice(0,callLog.length-250);
+  updateConsoleText();
+}};
+let diagnosticsInFlight=false;
+async function pollDiagnostics(){
+  if(diagnosticsInFlight||consoleState.classList.contains('hidden'))return;
+  diagnosticsInFlight=true;
+  try{
+    const response=await fetch('/api/diagnostics',{headers:{'X-Local-Token':TOKEN}});
+    if(response.ok){const data=await response.json();window._mixamoApiEvents=data.events||[];window._mixamoWsEvents=data.websocket||[];updateConsoleText();}
+  }catch{}finally{diagnosticsInFlight=false;}
+}
+function diagnosticReport(){
+  const events=Array.isArray(window._mixamoApiEvents)?window._mixamoApiEvents:[];
+  const audit=events.map(e=>`${e.at} ${e.method} ${e.route} → ${e.status} (${e.milliseconds} ms)`);
+  const ws=(Array.isArray(window._mixamoWsEvents)?window._mixamoWsEvents:[]).map(e=>`${e.at} ${e.event}`);
+  return [`Mixamo Studio diagnostics · ${new Date().toISOString()}`,
+    `Pipeline: ${activeJob?.id||'none'} (${activeJob?.status||'idle'})`,
+    '\n--- MIXAMO PIPELINE ---',logArr.join('\n')||'No pipeline output yet.',
+    '\n--- LOCAL API (route, status, duration; no credentials) ---',audit.join('\n')||'No API events',
+    '\n--- RANTLIST CLIENT REQUESTS ---',callLog.join('\n')||'No Rantlist requests',
+    '\n--- RANTLIST WEBSOCKET HANDSHAKE / SESSION ---',ws.join('\n')||'No WebSocket activity'].join('\n');
+}
+function updateConsoleText(){if(!consoleState.classList.contains('hidden'))$('consoleText').textContent=diagnosticReport();}
+$('toggleConsole').onclick=()=>{consoleState.classList.toggle('hidden');void pollDiagnostics();updateConsoleText();};
 $('closeConsole').onclick=()=>consoleState.classList.add('hidden');
+async function fullDiagnosticReport(){
+  let report=diagnosticReport();
+  if(!activeJob?.id)return report;
+  try{
+    const response=await fetch(`/api/jobs/${encodeURIComponent(activeJob.id)}/log`,{
+      headers:{'X-Local-Token':TOKEN}});
+    if(response.ok){
+      const full=await response.text();
+      const start=report.indexOf('\n--- MIXAMO PIPELINE ---');
+      const end=report.indexOf('\n--- LOCAL API',start);
+      if(start>=0&&end>start)report=report.slice(0,start)+'\n--- MIXAMO PIPELINE (FULL SAVED LOG) ---\n'+full+report.slice(end);
+    }
+  }catch{}
+  return report;
+}
+$('copyConsole').onclick=async()=>{await pollDiagnostics();try{await navigator.clipboard.writeText(await fullDiagnosticReport());showViewerNotice('Full pipeline log and API diagnostics copied.');}catch(e){showViewerNotice('Clipboard blocked. Use ↓ .txt to save the report.',true);}};
+$('downloadConsole').onclick=async()=>{
+  await pollDiagnostics();const body=await fullDiagnosticReport();
+  const url=URL.createObjectURL(new Blob([body],{type:'text/plain;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=`mixamo-diagnostics-${activeJob?.id||'session'}.txt`;
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+};
+setInterval(pollDiagnostics,3000);
 function renderJob(job){
   if(!job)return;
   activeJob=job;jobID=job.id;
@@ -105,7 +179,7 @@ function renderJob(job){
   if(/manual rigging/i.test(job.phase||''))showViewerNotice('Complete the Auto-Rigger in Brave; this job will resume automatically.');
   $('outputPath').textContent=`Output: ${job.output}`;
   if(job.oldestLine>cursor)cursor=job.oldestLine;
-  if(job.lines?.length){logArr.push(...job.lines);if(logArr.length>1500)logArr=logArr.slice(-1500);$('jobLog').textContent=logArr.join('\n');$('consoleText').textContent=logArr.join('\n');$('jobLog').scrollTop=$('jobLog').scrollHeight;$('consoleText').scrollTop=$('consoleText').scrollHeight;}
+  if(job.lines?.length){logArr.push(...job.lines);if(logArr.length>1500)logArr=logArr.slice(-1500);$('jobLog').textContent=logArr.join('\n');updateConsoleText();$('jobLog').scrollTop=$('jobLog').scrollHeight;$('consoleText').scrollTop=$('consoleText').scrollHeight;}
   $('activityCount').textContent=logArr.length;
   cursor=job.logCursor;
   $('getGLB').classList.toggle('hidden',job.status!=='completed'||!job.combinedGlb);
@@ -234,8 +308,7 @@ function renderLibrary(){
     else shot.textContent='◇';
     const info=document.createElement('div');info.className='model-card-label';
     const title=document.createElement('strong');title.textContent=model.name;
-    const detail=document.createElement('small');detail.textContent=(model.clips==null?'GLB':model.clips+' clips')+' · '+(model.source==='generated'?'Generated':'Imported');
-    info.append(title,detail);open.append(shot,info);
+    info.append(title);open.append(shot,info);
     open.onclick=()=>loadLibraryModel(model);
     const tools=document.createElement('div');tools.className='model-card-actions';
     const download=document.createElement('a');download.href=model.downloadUrl;download.title='Download combined GLB';download.textContent='↓';download.setAttribute('aria-label','Download '+model.name);

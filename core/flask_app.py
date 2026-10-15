@@ -7,6 +7,7 @@ signed-in Brave profile. It is deliberately a single-job LOCAL desktop app.
 from __future__ import annotations
 
 from collections import deque
+import time
 from io import BytesIO
 from datetime import datetime, timezone
 import hashlib
@@ -23,7 +24,7 @@ import subprocess
 import sys
 import uuid
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, jsonify, render_template, request, send_file, g
 from werkzeug.utils import secure_filename
 from rantlist_bridge import RantlistBridge, RantlistError, MAX_MODEL
 
@@ -48,6 +49,26 @@ app.config['JSON_SORT_KEYS'] = False
 STATE_LOCK = Lock()
 STATE = {'job': None}
 RANTLIST_BRIDGE = RantlistBridge()  # No imported profiles/tokens written to disk.
+API_EVENTS = deque(maxlen=300)
+API_EVENTS_LOCK = Lock()
+
+@app.after_request
+def audit_api_result(response):
+    # Log only method, route template and status. Never body, profile JSON,
+    # credentials, opaque IDs, private URLs, or query parameters.
+    if request.path.startswith('/api/') and request.endpoint:
+        template = app.url_map._rules_by_endpoint.get(request.endpoint, [])
+        route = next((rule.rule for rule in template if rule.rule.startswith('/api/')), '/api/*')
+        duration = round((time.monotonic()-g.request_started)*1000) if hasattr(g,'request_started') else 0
+        with API_EVENTS_LOCK:
+            API_EVENTS.append({'at':now(), 'method':request.method, 'route':route,
+                               'status':response.status_code, 'milliseconds':duration})
+    return response
+
+@app.get('/api/diagnostics')
+def api_diagnostics():
+    with API_EVENTS_LOCK:
+        return jsonify(events=list(API_EVENTS), websocket=RANTLIST_BRIDGE.diagnostics())
 
 
 def now():
@@ -60,10 +81,11 @@ def respond_error(message, code=400):
 
 @app.before_request
 def local_access_only():
+    g.request_started = time.monotonic()
     host = request.host.split(':')[0].lower()
     if host not in {'127.0.0.1', 'localhost', '[::1]'}:
         abort(403)
-    if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith('/api/rantlist/'):
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith(('/api/rantlist/', '/api/diagnostics')):
         if request.headers.get('X-Local-Token') != APP_TOKEN:
             abort(403)
 
@@ -566,6 +588,17 @@ def cancel_job():
     return jsonify(ok=True)
 
 
+@app.get('/api/jobs/<job_id>/log')
+def download_job_log(job_id):
+    with STATE_LOCK:
+        job = STATE['job']
+        if not job or job['id'] != job_id: abort(404)
+    path = LOGS / (job_id + '.log')
+    if not path.is_file(): abort(404)
+    return send_file(path, mimetype='text/plain', as_attachment=True,
+                     download_name=f'mixamo-{job_id}.log')
+
+
 @app.get('/api/jobs/<job_id>/file/<kind>')
 def download_result(job_id, kind):
     with STATE_LOCK:
@@ -670,6 +703,9 @@ def rantlist_publish(library_id):
     size = candidate.stat().st_size
     if size > MAX_MODEL:
         return respond_error('Rantlist accepts GLB files no larger than 20 MiB. Optimize the model first.',413)
+    catalogue = RANTLIST_BRIDGE.list_assets()
+    if catalogue['usedItems'] >= catalogue['maxItems']:
+        return respond_error(f'Rantlist Stage is full ({catalogue["usedItems"]}/{catalogue["maxItems"]} assets across avatars, models, floors and environments). Remove an unwanted item in Rantlist before publishing. No GLB was uploaded.', 409)
     glb = candidate.read_bytes()
     thumb = LIBRARY_THUMBS / (library_id+'.webp')
     thumbnail = thumb.read_bytes() if thumb.is_file() and thumb.stat().st_size <= 192 * 1024 else None

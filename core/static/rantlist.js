@@ -4,7 +4,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const localToken = JSON.parse($('bootstrap').textContent).token;
-const ui = {connected:false,nickname:null,tab:'local',models:[],selected:null};
+const ui = {connected:false,nickname:null,tab:'local',models:[],selected:null,usedItems:null,maxItems:60};
 // Keep only rendered/visible previews in flight to protect the shared Rantlist backend.
 const thumbs=new Map(), failedThumbs=new Set(), previewQueue=[];
 const previewInFlight=new Set();
@@ -57,6 +57,7 @@ function markThumbnail(item,img){
 }
 async function api(path,options={}) {
   const response=await fetch('/api/rantlist/'+path,{...options,headers:{'X-Local-Token':localToken,...(options.headers||{})}});
+  window.MixamoDiagnostics?.record(options.method||'GET', '/api/rantlist/'+path.replace(/[a-f0-9]{24,32}/gi,':id'), response.status);
   if(!response.ok){let reason=`HTTP ${response.status}`;try{reason=(await response.json()).error||reason;}catch{};throw new Error(reason);}
   return response;
 }
@@ -73,7 +74,8 @@ function updateConnection(){
   $('rantlistRefresh').classList.toggle('hidden',!ui.connected);
   $('rantlistImportLabel').classList.toggle('hidden',ui.connected);
   $('rantlistAccountBar').classList.toggle('hidden',!ui.connected);
-  $('rantlistAccountBar').textContent=ui.connected?`Rantlist Stage · ${ui.nickname} · Private avatar & model galleries · Max 20 MiB per GLB · 60 items across all Stage libraries`:'';
+  const capacity=ui.usedItems==null?'':` · ${ui.usedItems}/${ui.maxItems} Stage assets (${ui.models.length} GLBs visible)`;
+  $('rantlistAccountBar').textContent=ui.connected?`Rantlist Stage · ${ui.nickname}${capacity} · Max 20 MiB per GLB`:'';
   $('rantlistCount').textContent=ui.connected?`(${ui.models.length})`:'';
 }
 async function connectFile(file){
@@ -98,7 +100,7 @@ $('galleryRantlist').addEventListener('click',()=>setTab('rantlist'));
 $('rantlistRefresh').addEventListener('click',()=>{failedThumbs.clear();refresh().catch(e=>announce(e.message,true));});
 $('rantlistDisconnect').addEventListener('click',async()=>{
   try{await api('disconnect',{method:'POST'});}catch{}
-  ui.connected=false;ui.nickname=null;ui.models=[];ui.selected=null;clearThumbs();updateConnection();render();
+  ui.connected=false;ui.nickname=null;ui.models=[];ui.selected=null;ui.usedItems=null;clearThumbs();updateConnection();render();
   announce('Disconnected from Rantlist. Your remote library has not been modified.');
 });
 function clearThumbs(){for(const item of thumbs.values())URL.revokeObjectURL(item.url);thumbs.clear();failedThumbs.clear();previewQueue.length=0;previewObserver?.disconnect();}
@@ -107,6 +109,8 @@ async function refresh(){
   try{
     const data=await(await api('assets')).json();
     ui.models=Array.isArray(data.items)?data.items:[];
+    ui.usedItems=Number.isInteger(data.usedItems)?data.usedItems:null;
+    ui.maxItems=Number.isInteger(data.maxItems)&&data.maxItems>0?data.maxItems:60;
     updateConnection();render();
   }catch(error){
     if(/expired|reconnect|session/i.test(error.message)) {ui.connected=false;ui.models=[];updateConnection();}
@@ -146,8 +150,7 @@ function render(){
     if(item.thumbnail){const image=document.createElement('img');shot.textContent='';shot.append(image);markThumbnail(item,image);}
     const name=document.createElement('div');name.className='model-card-label';
     const heading=document.createElement('strong');heading.textContent=item.name;
-    const secondary=document.createElement('small');secondary.textContent=`${item.kind==='avatar'?'Stage avatar':'Stage model'} · ${(item.size/1048576).toFixed(1)} MiB`;
-    name.append(heading,secondary);open.append(shot,name);open.onclick=()=>loadRemote(item);
+    name.append(heading);open.append(shot,name);open.onclick=()=>loadRemote(item);
     const actions=document.createElement('div');actions.className='model-card-actions';
     const dl=document.createElement('button');dl.title='Download GLB from Rantlist';dl.textContent='↓';dl.onclick=()=>download(item);
     const del=document.createElement('button');del.title='Delete from Rantlist Stage';del.textContent='×';del.onclick=()=>erase(item);
@@ -162,7 +165,7 @@ function publishStatus(message,state=''){
   status.textContent=message;status.className='rantlist-publish-status '+state;
 }
 function setUploading(value){
-  uploading=value;submit.disabled=value;nameInput.disabled=value;
+  uploading=value;submit.disabled=value||(ui.usedItems!=null&&ui.usedItems>=ui.maxItems);nameInput.disabled=value;
   cancel.disabled=value;
   for(const radio of document.querySelectorAll('input[name="rantlistPublishKind"]'))radio.disabled=value;
 }
@@ -178,7 +181,11 @@ function publish(localId,localName){
   nameInput.value=proposed;
   $('rantlistPublishSource').textContent=`Source: ${proposed} · Existing GLB in your local Model Library`;
   document.querySelector('input[name="rantlistPublishKind"][value="avatar"]').checked=true;
-  publishStatus('Ready to upload. The GLB will be added to your private Rantlist Stage library.');
+  const full=ui.usedItems!=null&&ui.usedItems>=ui.maxItems;
+  publishStatus(full?`Stage library full (${ui.usedItems}/${ui.maxItems}). The limit includes avatars, models, floors and environments. Delete an unneeded asset from Rantlist before uploading.`:
+    `Ready to upload. ${ui.usedItems==null?'Capacity will be checked before upload.':`${ui.usedItems}/${ui.maxItems} Stage assets currently saved.`}`,
+    full?'failed':'');
+  submit.disabled=full;
   submit.textContent='Upload GLB';cancel.textContent='Cancel';
   dialog.classList.remove('hidden');nameInput.focus();nameInput.select();
 }
@@ -188,6 +195,9 @@ submit.addEventListener('click',async()=>{
   if(!name||name.length>80){publishStatus('Enter a name from 1 to 80 characters.','failed');return;}
   if(!['avatar','model'].includes(kind)){publishStatus('Select Avatar or Model.','failed');return;}
   if(publishFinished){closePublish();return;}
+  if(ui.usedItems!=null&&ui.usedItems>=ui.maxItems){
+    publishStatus(`Rantlist Stage gallery is full (${ui.usedItems}/${ui.maxItems}). Remove an asset first. No upload was started.`,'failed');return;
+  }
   const localId=selectedLocalId;
   setUploading(true);let seconds=0;
   publishStatus('Uploading your GLB to Rantlist Stage…\nWaiting for confirmation from the Rantlist server.','busy');
@@ -210,6 +220,9 @@ submit.addEventListener('click',async()=>{
     announce(`Published “${result.name}” to Rantlist Stage.`);
   }catch(error){
     publishStatus('Upload failed: '+error.message+'\nNo success was reported. Check your Rantlist gallery before retrying to avoid duplicates.','failed');
+    if(/60-item|gallery is full|Stage is full|gallery limit/i.test(error.message)){
+      ui.usedItems=ui.maxItems;updateConnection();
+    }
     announce('Rantlist publish failed: '+error.message,true);
   }finally{clearInterval(ticker);setUploading(false);}
 });

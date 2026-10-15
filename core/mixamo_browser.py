@@ -604,9 +604,34 @@ def download_one(page, outpath: Path, spec: dict):
         has_text=re.compile("Download Settings", re.I)).first
     confirm = modal.get_by_role("button", name=re.compile(r"^\s*Download\s*$", re.I)).first
     # This waits for a real browser download event. save_as waits until done.
-    with page.expect_download(timeout=300000) as pending:
-        confirm.click(timeout=20000)
-    download = pending.value
+    try:
+        with page.expect_download(timeout=300000) as pending:
+            confirm.click(timeout=20000)
+        download = pending.value
+    except PWTimeout as exc:
+        # A timeout means Mixamo did not trigger a Playwright download event.
+        # Do not click Download twice: the first request might still complete.
+        # Capture local, actionable diagnostics without storing cookies or URLs.
+        try:
+            status = page.evaluate('''() => ({
+              modal: [...document.querySelectorAll('.modal, [role="dialog"]')]
+                .filter(x => x.getClientRects().length).map(x => x.innerText.slice(0,350)).slice(0,2),
+              alerts: [...document.querySelectorAll('[role="alert"], .toast, .notification')]
+                .filter(x => x.getClientRects().length).map(x => x.innerText.slice(0,160)).slice(0,3),
+              action: document.querySelector('.animation-settings-header h3')?.textContent?.trim() || ''
+            })''')
+            print('[download-diag] Mixamo UI after timeout: '+json.dumps(status,ensure_ascii=False), flush=True)
+        except Exception as diag_exc:
+            print('[download-diag] Could not read dialog state: '+type(diag_exc).__name__, flush=True)
+        try:
+            screenshot = outpath.with_suffix('.download-timeout.png')
+            page.screenshot(path=str(screenshot), timeout=10000)
+            print('[download-diag] Local browser screenshot: '+str(screenshot),flush=True)
+        except Exception:
+            pass
+        raise RuntimeError('Mixamo did not emit a browser download event within 300 seconds. '
+                           'Check Brave Downloads and the Mixamo dialog; see [download-diag] '
+                           'in Logs. Re-run the job to resume existing FBXs.') from exc
     if not download.suggested_filename.lower().endswith(".fbx"):
         raise RuntimeError(f"Unexpected downloaded file: {download.suggested_filename}")
     download.save_as(str(outpath))  # BLOCKS until the actual FBX transfer completes
@@ -684,6 +709,16 @@ def run():
                 )
             browser.set_default_timeout(20000)
             page = next((p for p in browser.pages if "mixamo.com" in p.url), None) or browser.new_page()
+            def report_failed_response(response):
+                try:
+                    if response.status >= 400 and 'mixamo.com' in response.url:
+                        from urllib.parse import urlsplit
+                        address = urlsplit(response.url)
+                        # Never log query parameters, cookie values, or credentials.
+                        print(f'[mixamo-http] {response.status} {response.request.method} '
+                              f'{address.netloc}{address.path[:140]}', flush=True)
+                except Exception: pass
+            page.on('response', report_failed_response)
             try:
                 ensure_login(page, via_cdp=bool(args.cdp))
                 previous_character_name = page.locator('.product-preview .product-nav h2').first.text_content(timeout=3000) or ''

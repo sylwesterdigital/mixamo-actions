@@ -150,6 +150,16 @@ class RantlistContractTests(unittest.TestCase):
                       "requestUrl.pathname === '/version'"):
             self.assertIn(piece,text)
 
+    def test_ws_diagnostics_do_not_expose_identity_or_tokens(self):
+        bridge=RantlistBridge()
+        with patch('rantlist_bridge.threading.Thread'):
+            bridge.connect(parse_portable_profile(PROFILE),socket_factory=lambda url:Socket(),version_fetcher=lambda:VERSIONS)
+        output=json.dumps(bridge.diagnostics())
+        self.assertIn('stage_access_granted',output)
+        self.assertNotIn(IDENTITY,output)
+        self.assertNotIn('f'*64,output)
+        bridge.close()
+
     def test_denies_mismatched_identity(self):
         bridge=RantlistBridge()
         with self.assertRaisesRegex(RantlistError,'different identity'):
@@ -203,6 +213,32 @@ class RantlistContractTests(unittest.TestCase):
         self.assertEqual(mime,'image/jpeg')
         self.assertTrue(image.startswith(b'\xff\xd8\xff'))
         self.assertTrue(requests[0].endswith('&v=123'))
+
+    def test_capacity_counts_all_stage_types_not_only_glbs(self):
+        bridge=RantlistBridge()
+        asset={'id':'a'*32,'kind':'avatar','name':'Avatar','ext':'glb','size':3200,
+               'thumbnailUrl':'/stage-private/view/'+'a'*32+'/thumb.webp?k='+'f'*64+'&v=12'}
+        other={'id':'b'*32,'kind':'environment','name':'World','ext':'hdr','size':1000}
+        bridge._json=lambda *args,**kwargs:{'items':[dict(asset,id=f'{i:032x}') for i in range(50)]+
+            [dict(other,id=f'{i:032x}') for i in range(50,60)],'maxItems':60,
+            'storage':{'fileCount':125}}
+        result=bridge.list_assets()
+        self.assertEqual(len(result['items']),50)
+        self.assertEqual(result['usedItems'],60)
+        self.assertEqual(result['maxItems'],60)
+        self.assertEqual(result['storage']['fileCount'],125)
+
+    def test_capacity_error_maps_to_conflict_not_oversized_file(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        bridge=RantlistBridge();bridge.ws=object();bridge.token='a'*64;bridge.expiry=9999999999999
+        def fakeopen(req,timeout=None):
+            raise HTTPError(req.full_url,413,'Entity Too Large',{},
+                BytesIO(b'{"error":"You have reached the 60-item personal Stage gallery limit."}'))
+        bridge.opener.open=fakeopen
+        with self.assertRaises(RantlistError) as caught:
+            bridge._http('/stage-private/api/assets',method='POST',data=b'x'*40)
+        self.assertEqual(caught.exception.status,409)
 
     def test_thumbnail_failure_is_reported_without_losing_uploaded_glb(self):
         bridge=RantlistBridge()

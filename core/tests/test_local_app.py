@@ -28,6 +28,14 @@ class FlaskLocalTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
+    def test_diagnostics_require_token_and_log_safe_routes(self):
+        denied=self.client.get('/api/diagnostics',headers={'Host':'127.0.0.1:5055'})
+        self.assertEqual(denied.status_code,403)
+        ok=self.client.get('/api/diagnostics',headers=self.headers)
+        self.assertEqual(ok.status_code,200)
+        self.assertTrue(any(row['route']=='/api/diagnostics' for row in ok.json['events']))
+        self.assertFalse(any('Authorization' in str(e) or 'token' in str(e).lower() for e in ok.json['events']))
+
     def test_home(self):
         response = self.client.get('/', headers={'Host': '127.0.0.1:5055'})
         self.assertEqual(response.status_code, 200)
@@ -51,10 +59,10 @@ class FlaskLocalTests(unittest.TestCase):
             headers={'Host':'127.0.0.1:5055'}).status_code,403)
 
     def test_rantlist_remote_listing_and_upload_from_local_library(self):
-        with patch.object(self.mod.RANTLIST_BRIDGE,'list_assets',return_value={'items':[], 'maxItems':60}):
-            result=self.client.get('/api/rantlist/assets',headers=self.headers)
-            self.assertEqual(result.status_code,200)
-            self.assertEqual(result.json['items'],[])
+        # Keep the private-gallery fixture active for BOTH listing and upload.
+        # Previously it ended after the GET; POST then hit the real Rantlist
+        # connector, which correctly returned 401 in an unauthenticated test.
+        catalogue = {'items': [], 'maxItems': 60, 'usedItems': 0, 'capacityKnown': True}
         import hashlib
         uid=hashlib.sha256(b'test').hexdigest()[:24]
         source=Path(self.temp.name)/'combined.glb'
@@ -63,7 +71,11 @@ class FlaskLocalTests(unittest.TestCase):
             original=self.mod._load_library()
             self.mod._save_library(original+[{'id':uid,'name':'Test dancer','path':str(source),'source':'generated','created':'now'}])
         try:
-            with patch.object(self.mod.RANTLIST_BRIDGE,'publish',return_value={'id':'a'*32,'kind':'avatar','thumbnailSaved':False}) as publish:
+            with patch.object(self.mod.RANTLIST_BRIDGE, 'list_assets', return_value=catalogue) as listing, \
+                 patch.object(self.mod.RANTLIST_BRIDGE, 'publish', return_value={'id':'a'*32,'kind':'avatar','thumbnailSaved':False}) as publish:
+                response = self.client.get('/api/rantlist/assets', headers=self.headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json['items'], [])
                 result=self.client.post('/api/rantlist/publish/'+uid,json={'kind':'avatar'},headers=self.headers)
                 self.assertEqual(result.status_code,200)
                 self.assertEqual(publish.call_args.kwargs['glb'][:4],b'glTF')
@@ -75,8 +87,43 @@ class FlaskLocalTests(unittest.TestCase):
                 invalid=self.client.post('/api/rantlist/publish/'+uid,json={'name':''},headers=self.headers)
                 self.assertEqual(invalid.status_code,400)
                 self.assertEqual(publish.call_count,2)
+                self.assertEqual(listing.call_count, 3)  # GET + two valid uploads
         finally:
             with self.mod.LIBRARY_LOCK:self.mod._save_library(original)
+
+    def test_rantlist_publish_quota_preflight_never_uploads(self):
+        # A full account must fail locally without touching the upload API.
+        import hashlib
+        key = hashlib.sha256(b'quota-test').hexdigest()[:24]
+        source = Path(self.temp.name) / 'quota-example.glb'
+        source.write_bytes(b'glTF' + bytes(40))
+        local_item = {'id': key, 'name': 'Quota example', 'path': str(source), 'source': 'generated'}
+        full = {'items': [], 'usedItems': 60, 'maxItems': 60, 'capacityKnown': True}
+        with patch.object(self.mod, '_load_library', return_value=[local_item]), \
+             patch.object(self.mod.RANTLIST_BRIDGE, 'list_assets', return_value=full), \
+             patch.object(self.mod.RANTLIST_BRIDGE, 'publish') as upload:
+            response = self.client.post('/api/rantlist/publish/' + key,
+                                        json={'kind': 'avatar'}, headers=self.headers)
+            self.assertEqual(response.status_code, 409, response.data)
+            self.assertIn('60/60', response.json['error'])
+            upload.assert_not_called()
+
+    def test_rantlist_publish_disconnected_session_is_unauthorized(self):
+        # Verify an authentication failure is correctly returned, not masked.
+        from rantlist_bridge import RantlistError
+        import hashlib
+        key = hashlib.sha256(b'not-connected').hexdigest()[:24]
+        source = Path(self.temp.name) / 'not-connected.glb'
+        source.write_bytes(b'glTF' + bytes(40))
+        local_item = {'id': key, 'name': 'Not connected', 'path': str(source), 'source': 'generated'}
+        with patch.object(self.mod, '_load_library', return_value=[local_item]), \
+             patch.object(self.mod.RANTLIST_BRIDGE, 'list_assets',
+                          side_effect=RantlistError('Sign in required', 401)), \
+             patch.object(self.mod.RANTLIST_BRIDGE, 'publish') as upload:
+            response = self.client.post('/api/rantlist/publish/' + key,
+                                        json={'kind': 'avatar'}, headers=self.headers)
+            self.assertEqual(response.status_code, 401, response.data)
+            upload.assert_not_called()
 
     def test_remote_thumbnail_keeps_actual_mime_type_and_rejects_html(self):
         with patch.object(self.mod.RANTLIST_BRIDGE,'asset',return_value=(b'\xff\xd8\xff'+b'x'*64,'image/jpeg')):
