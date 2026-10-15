@@ -1,0 +1,54 @@
+# Mixamo Studio — update log
+
+## v1.1.1 — 2026-10-15
+
+- Prevent locally edited release-managed README.md from blocking a newer version: save original bytes in `updates/.backups/before-vX.Y.Z-*/README.md` before replacing the release copy.
+- Record preserved tracked changes in `updates/.backups/.../local-edits.json`, and restore them automatically if installation or health checks fail.
+- Refuse updates when release-managed Git changes are staged, so automatic publication never mixes pending user commits into a release.
+- Reject existing release target symlinks to avoid writes outside the repository.
+- Preserve v1.1.0 Model Library, authenticated Mixamo pipeline, and combined GLB export.
+
+## v1.1.0 — 2026-10-15
+
+- Added a full-window collapsible bottom Model Library with scene-screenshot preview cards, load/download/delete controls, and no page-level scrolling.
+- Finished combined GLB exports are automatically registered in a persistent library at `~/MixamoLocal/library` (or `MIXAMO_FLASK_WORKSPACE/library`).
+- Added Save to Library for manually opened GLB files and Capture to refresh thumbnails from the current Three.js stage.
+- Library API includes safe model streaming, GLB downloads, thumbnail uploads, and removals; deleting generated cards leaves original exports intact.
+- Preserved Mixamo/Brave/Blender automation, NLA animation export and v1.0.2 Git/Ubuntu watcher behavior.
+
+## v1.0.2 — 2026-10-15
+
+- Fixed Git and homepage publish markers: disabled actions no longer count as successful publishing, so later enabling them processes the already-installed version.
+- The permanent watcher keeps checking `updates/`; `--once` is explicitly documented as a one-pass diagnostic/install mode.
+- Corrected installer conflict detection to accept verified source files from the last installed release when Git publishing was previously disabled, while still rejecting manual edits.
+- Preserved automatic commit, `vX.Y.Z` tag, and `origin main` push with the workstation's existing Git credentials.
+- Added regression tests covering publish-marker behavior and preserving locally edited files.
+- Only manifest-verified release files are staged for Git, never unrelated user files; existing release tags must point to the correct commit.
+- Missing SSH deployment configuration is a publish failure, not a successful homepage release.
+- `--once` retries pending publication immediately, without a cooldown after a previous disabled or failed run, and exits nonzero if any enabled publication fails.
+
+## v1.0.1 — 2026-10-15
+
+- Fixed macOS `/var` versus `/private/var` canonical-path mismatch in the Flask dry-run test.
+- Removed the hard-coded release version in tests so future version bumps work without test rewrites.
+- Added a port-5055 preflight before source installation; refuses to disrupt unrelated processes and reports PID/command for diagnosis.
+- Updated local Studio and public homepage version labels to v1.0.1.
+- Fixed watcher precedence so explicit Zsh environment overrides `mixamo-watch.env` and is passed to install subprocesses.
+- Clarified repository-only update workflow: ZIP packages live in `updates/`; watcher starts from repository root, never from Downloads.
+- Preserved the existing Flask/Three.js, Brave/Mixamo/Blender pipeline and single combined animation GLB export.
+
+## v1.0.0 — 2026-10-15
+
+- Established `mixamo-actions-vMAJOR.MINOR.PATCH.zip` as the full-release format.
+- Added `mixamo-studio-watch.sh`: watches `updates/`, verifies safe ZIP paths, installs to `core/`, runs checks, restarts Flask and rolls back failures.
+- Added safe deployment scripts, release status API and update overlay in existing tabs.
+- Added a project homepage for `/var/www/mojoworks/labs/mixamo-actions`.
+- Added optional Git commit/tag/push using the workstation's existing credentials, with no credentials stored in the package.
+- Preserved the existing Mixamo/Brave/Blender pipeline and combined animation GLB export.
+
+### Release policy
+
+- PATCH: bug fixes. MINOR: backwards-compatible features. MAJOR: breaking changes.
+- Every package includes its `release.json`, this log, complete `core/` source, homepage and deployment scripts.
+- Watcher refuses downgrades, duplicate releases, unsafe archives and failed health checks.
+- Releases are never installed while a Mixamo/Blender job is running.

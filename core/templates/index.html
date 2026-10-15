@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mixamo Studio — Motion Workbench</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='studio.css') }}">
+<script type="importmap">
+{
+ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.min.js"
+ }
+}
+</script>
+</head>
+<body>
+<div id="app">
+<header class="topbar">
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.1.1</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
+  <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
+</header>
+<div class="workspace">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head"><span class="kicker">WORKFLOW</span><span class="sidebar-sub">Mixamo → Blender → GLB</span></div>
+    <div class="sidebar-tabs"><button type="button" class="tab active" data-tab="pipeline">Build</button><button type="button" class="tab" data-tab="activity">Activity <span id="activityCount">0</span></button></div>
+    <div id="tab-pipeline" class="tab-body">
+      <section class="section"><div class="section-title"><span class="step">01</span><strong>Character source</strong></div>
+        <div class="segmented"><button id="sourcePathButton" class="selected" type="button">File path</button><button id="sourceUploadButton" type="button">Upload ZIP</button></div>
+        <div id="sourcePath"><label for="characterPath" class="field-label">Rigged FBX / Tripo ZIP on disk</label><input id="characterPath" type="text" placeholder="/Users/…/character.zip" spellcheck="false" autocomplete="off"/></div>
+        <div id="sourceUpload" class="hidden"><label class="field-label" for="characterFile">Upload ZIP or FBX</label><input id="characterFile" type="file" accept=".zip,.fbx"/><p class="hint">Outputs saved to the local upload workspace.</p></div>
+      </section>
+      <section class="section"><div class="section-title"><span class="step">02</span><strong>Animation collection</strong><a href="/collector.js" class="quiet-link" title="Download the DevTools animation collector">Collector ↗</a></div>
+        <div class="segmented"><button id="presetSavedButton" class="selected" type="button">Library</button><button id="presetPathButton" type="button">JSON path</button></div>
+        <div id="presetSaved"><label for="presetSelect" class="field-label">Saved motion preset</label><select id="presetSelect"><option value="">Select a motion preset…</option>{% for p in presets %}<option value="{{p.filename}}">{{p.name}} · {{p.count}} clips</option>{% endfor %}</select><div class="inline-file"><label for="presetFile" class="mini-file">+ Import JSON<input id="presetFile" type="file" accept=".json"/></label><button id="savePreset" type="button" class="btn compact">Save to library</button></div></div>
+        <div id="presetPath" class="hidden"><label for="presetPathInput" class="field-label">Animation JSON on disk</label><input id="presetPathInput" type="text" placeholder="/path/to/animations.json" spellcheck="false"/></div>
+      </section>
+      <section class="section"><div class="section-title"><span class="step">03</span><strong>Export settings</strong><span class="settings-caption">ONE GLB</span></div>
+        <div class="settings-grid"><label class="field">Draco <input id="draco" type="number" min="0" max="6" value="6"/></label><label class="field">WebP quality <input id="webp" type="number" min="0" max="100" value="30"/></label></div>
+        <details class="advanced"><summary>Advanced settings <span>⌄</span></summary><div class="advanced-body">
+          <div class="settings-grid"><label class="field">Rig timeout (sec)<input id="timeout" type="number" min="60" max="7200" value="900"/></label><label class="field">CDP port<input id="port" type="number" min="1024" max="65535" value="9222"/></label></div>
+          <label class="field full">Blender executable<input id="blender" value="{{ blender }}" spellcheck="false"/></label>
+          <div class="checks"><label><input id="skipUpload" type="checkbox"/> Reuse loaded character</label><label><input id="skipDownload" type="checkbox"/> Blender only</label><label><input id="confirmUpload" type="checkbox"/> Confirm upload manually</label><label><input id="requireTextures" type="checkbox"/> Require textures</label><label><input id="noDraco" type="checkbox"/> Disable Draco</label><label><input id="noWebp" type="checkbox"/> Disable WebP</label><label><input id="continueOnError" type="checkbox"/> Continue on failed clips</label><label><input id="dryRun" type="checkbox"/> Dry run</label></div>
+        </div></details>
+      </section>
+      <div id="feedback" role="status"></div>
+    </div>
+    <div id="tab-activity" class="tab-body hidden"><div class="activity-summary"><strong>Pipeline activity</strong><span id="jobStatus" class="job-label">Idle</span></div><p id="phase" class="phase">Waiting for a job</p><div id="manualNotice" class="notice hidden">Action needed in Brave: complete the Mixamo Auto-Rigger. Processing resumes afterward.</div><pre id="jobLog" class="job-log" aria-live="polite">No job activity yet.</pre><div id="outputPath" class="output-path"></div><div class="activity-links"><a id="getGLB" class="btn compact hidden" href="#">↓ Combined GLB</a><a id="getZIP" class="btn compact hidden" href="#">↓ Bundle ZIP</a></div></div>
+    <div class="sidebar-footer"><div class="run-row"><button type="button" class="btn primary" id="start"><span>▶</span> Build avatar</button><button type="button" class="btn danger" id="cancel" disabled title="Cancel current pipeline job">■</button></div><div class="run-caption"><span id="runStatus">No active build</span><span id="runLED" class="led"></span></div></div>
+  </aside>
+  <main class="viewport" id="viewport">
+    <div id="sceneCanvas" aria-label="3D preview viewport"></div>
+    <div class="viewport-toolbar"><div class="viewport-title"><span class="live-flag">VIEWPORT</span><strong id="assetName">No character loaded</strong><span id="clipCount">0 CLIPS</span></div><div class="viewer-actions"><label class="btn viewport-file" for="localGlb">↥ Open GLB<input id="localGlb" type="file" accept=".glb,model/gltf-binary"/></label><button type="button" class="btn" id="saveCurrent" title="Save the current model to the library" disabled>✚ Save</button><button type="button" class="btn" id="loadFinished" disabled>↺ Latest export</button><button type="button" class="btn" id="resetView">◎ Frame</button></div></div>
+    <div id="emptyState" class="empty"><div class="empty-icon">◇</div><h2>Your animation stage</h2><p>Build an avatar or open a GLB to inspect its model and animation clips.</p><label for="localGlb" class="btn primary">Open a GLB to preview</label></div>
+    <div id="viewerNotice" class="viewer-notice hidden" role="status"></div>
+    <div class="viewer-bottom"><div class="transport"><button type="button" id="prevClip" title="Previous animation">⏮</button><button type="button" id="playPause" title="Play / pause">▶</button><button type="button" id="stopClip" title="Stop">◼</button><button type="button" id="nextClip" title="Next animation">⏭</button><span class="transport-rule"></span><span id="nowPlaying">No active clip</span></div><div class="bottom-right"><span id="viewerState">SCENE READY</span><button id="toggleConsole" class="console-toggle" type="button">▤ Logs</button></div></div>
+    <section id="libraryDock" class="library-dock" aria-label="Model library">
+      <div class="library-head">
+        <button id="libraryToggle" type="button" title="Collapse / expand model library" aria-expanded="true"><span id="libraryChevron">▾</span> MODEL LIBRARY <span id="libraryCount">0</span></button>
+        <div class="library-head-actions"><span id="libraryHint">Completed builds are saved automatically</span><button type="button" id="captureCurrent" title="Refresh the selected model thumbnail from the stage" disabled>▣ Capture</button></div>
+      </div>
+      <div id="libraryCards" class="library-cards"><p class="library-empty">Your finished models will appear here.</p></div>
+    </section>
+    <div id="consoleDrawer" class="console-drawer hidden"><div class="console-header">PIPELINE LOG <button type="button" id="closeConsole">×</button></div><pre id="consoleText">No job activity yet.</pre></div>
+    <div id="guiMount"></div>
+  </main>
+</div>
+</div>
+<script id="bootstrap" type="application/json">{{ {'token':token,'presets':presets,'session':session,'workspace':workspace}|tojson }}</script>
+<script defer src="{{ url_for('static', filename='studio.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='viewer.mjs') }}"></script>
+<script src="{{ url_for('static', filename='release-watch.js') }}" defer></script>
+</body></html>

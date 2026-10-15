@@ -1,0 +1,1 @@
+(async()=>{try{const response=await fetch('release.json',{cache:'no-store'});if(!response.ok)return;const data=await response.json();const v='v'+data.version;document.querySelectorAll('#version,#footerVersion').forEach(el=>{el.textContent=el.id==='footerVersion'?'RELEASE '+v:v});}catch(_){}})();

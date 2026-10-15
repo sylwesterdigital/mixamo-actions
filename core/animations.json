@@ -1,0 +1,20 @@
+{
+  "animations": [
+    "Walking",
+    "Running",
+    "Idle",
+    "Jumping",
+    {
+      "search": "Sitting Idle",
+      "title": "Sitting Idle"
+    },
+    {
+      "search": "Jump",
+      "title": "Jump",
+      "description": "Female Forward Running Jump",
+      "motionId": "124620901",
+      "filename": "Jump",
+      "redownload": true
+    }
+  ]
+}

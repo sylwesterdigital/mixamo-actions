@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "^(release\\.json)$">
+  Header set Cache-Control "no-store"
+</FilesMatch>
