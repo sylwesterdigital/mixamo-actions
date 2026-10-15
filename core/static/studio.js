@@ -89,11 +89,37 @@ function refreshPresets(items){
   if(Array.from(list.options).some(o=>o.value===selected)) list.value=selected;
   else try{const st=JSON.parse(localStorage.getItem(storeKey)||'{}');if(st.preset)list.value=st.preset;}catch{}
 }
-$('savePreset').onclick=async()=>{
-  const file=$('presetFile').files[0]; if(!file)return feedback('Select a JSON file from Motion Collector.');
-  const data=new FormData();data.append('file',file);
-  try{const response=await send('/api/presets',{method:'POST',body:data});refreshPresets(response.presets);$('presetSelect').value=response.filename;storeSettings();feedback(`Preset saved: ${response.count} clips`,true);}catch(e){feedback(e.message);}
-};
+let presetImportBusy=false, lastPresetImportAt=0;
+$('presetFile').addEventListener('change',async()=>{
+  const input=$('presetFile'),file=input.files?.[0];
+  if(!file)return;
+  if(presetImportBusy)return;
+  const status=$('presetImportStatus');
+  if(!/\.json$/i.test(file.name)){
+    const message='Choose an animation .json file.';
+    status.textContent=message;feedback(message);input.value='';return;
+  }
+  presetImportBusy=true;
+  const wasStartDisabled=$('start').disabled;
+  $('start').disabled=true;
+  status.textContent=`Importing ${file.name}…`;
+  try{
+    const data=new FormData();data.set('file',file,file.name);
+    const response=await send('/api/presets',{method:'POST',body:data});
+    refreshPresets(response.presets);
+    setMode('preset','saved');
+    $('presetSelect').value=response.filename;
+    lastPresetImportAt=Date.now();
+    storeSettings();
+    const message=`${response.alreadySaved?'Already saved':'Imported'}: ${response.filename} · ${response.count} animations. Selected for the next build.`;
+    status.textContent=message;feedback(message,true);
+  }catch(e){
+    status.textContent=`Import failed: ${e.message}`;
+    feedback(`Animation JSON import failed: ${e.message}`);
+  }finally{
+    input.value='';presetImportBusy=false;$('start').disabled=wasStartDisabled;
+  }
+});
 function buildForm(){
   const d=new FormData();d.set('source_mode',sourceMode);d.set('preset_mode',presetMode);
   if(sourceMode==='path')d.set('character_path',$('characterPath').value.trim());
@@ -104,6 +130,7 @@ function buildForm(){
   return d;
 }
 $('start').onclick=async()=>{
+  if(presetImportBusy)return feedback('Wait until the animation JSON import finishes.');
   feedback('');storeSettings();$('start').disabled=true;
   try{const r=await send('/api/jobs',{method:'POST',body:buildForm()});cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;showViewerNotice(`Build started · ${r.animations} animations`);renderJob(r.job);}
   catch(e){feedback(e.message);$('start').disabled=false;}
@@ -374,7 +401,7 @@ async function refresh(){
     const response=await send(`/api/status?since=${cursor}`);
     const s=response.session;
     $('braveStatus').textContent=s.portOpen?'Brave · Connected':'Brave · Offline';$('braveStatus').classList.toggle('online',s.portOpen);
-    if(response.presets)refreshPresets(response.presets);
+    if(response.presets && !presetImportBusy && Date.now()-lastPresetImportAt>5000)refreshPresets(response.presets);
     if(response.job){if(response.job.id!==jobID){cursor=0;logArr=[];}renderJob(response.job);}
   }catch(e){console.warn('Status update failed',e);}finally{updatePending=false;}
 }

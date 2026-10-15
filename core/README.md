@@ -122,3 +122,9 @@ download session automatically.
 Failed or interrupted builds expose a **↻ Resume** button in Studio (including after an app restart). The last validated job's source path, preset and safe CLI options are stored locally; upload bytes are never copied again. `resume_state.py` validates per-animation FBX hashes and only downloads missing/invalid clips. Browser search timeouts get two bounded retries. Download-button timeouts are not retried automatically, because Mixamo may still be producing a file. Once all clips are present, Blender builds the combined GLB without revisiting Mixamo.
 
 For builds started with an older Studio that did not persist job details, select **File path** with the *original* upload ZIP path from Logs, choose the unchanged preset and click Build. Older `fbx/manifest.json` and saved original source are verified before any legacy FBXs are reused.
+
+
+Animation collection: Use **+ Import JSON file** to upload a collector JSON into
+`MIXAMO_FLASK_WORKSPACE/presets`; the UI selects it immediately. A Finder
+`file:///...` URL is also accepted in JSON path mode. No browser filesystem
+permissions are required for server-side path access.

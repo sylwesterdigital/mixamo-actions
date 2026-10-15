@@ -214,6 +214,50 @@ class FlaskLocalTests(unittest.TestCase):
         # macOS resolves /var/... to /private/var/...; compare canonical paths.
         self.assertEqual(Path(result['output']).parent.resolve(), source.parent.resolve())
 
+    def test_import_multiple_motion_packs_and_file_url_build(self):
+        from urllib.parse import quote
+        source = Path(self.temp.name) / 'second-preset-avatar.zip'
+        with zipfile.ZipFile(source, 'w') as z:
+            z.writestr('model.fbx', b'placeholder FBX')
+        # 24 actions: same shape as the user-supplied animations-males.json.
+        male = {'animations': [dict(search=f'action-{i}', title=f'Action {i}',
+                                    motionId=str(100000000+i), filename=f'Action_{i}')
+                               for i in range(24)]}
+        first = self.client.post('/api/presets',
+            data={'file':(io.BytesIO(json.dumps(male).encode()), 'animations-males.json')},
+            headers=self.headers, content_type='multipart/form-data')
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(first.json['count'], 24)
+        again = self.client.post('/api/presets',
+            data={'file':(io.BytesIO(json.dumps(male).encode()), 'animations-males.json')},
+            headers=self.headers, content_type='multipart/form-data')
+        self.assertEqual(again.status_code, 200, again.data)
+        self.assertEqual(again.json['filename'], first.json['filename'])
+        self.assertTrue(again.json['alreadySaved'])
+        another = {'animations':[{'search':'new animation'}]}
+        different = self.client.post('/api/presets',
+            data={'file':(io.BytesIO(json.dumps(another).encode()), 'animations-males.json')},
+            headers=self.headers, content_type='multipart/form-data')
+        self.assertEqual(different.status_code, 200, different.data)
+        self.assertNotEqual(different.json['filename'], first.json['filename'])
+        self.assertEqual(json.loads((self.mod.PRESETS / first.json['filename']).read_text()), male)
+        invalid = self.client.post('/api/presets',
+            data={'file':(io.BytesIO(b'not-json'), 'invalid-motions.json')},
+            headers=self.headers, content_type='multipart/form-data')
+        self.assertEqual(invalid.status_code, 400)
+        self.assertFalse((self.mod.PRESETS / 'invalid-motions.json').exists())
+        form = {'source_mode':'path','character_path':str(source), 'preset_mode':'path',
+                'preset_path':'file://'+quote(str(self.mod.PRESETS / first.json['filename'])),
+                'blender':sys.executable,'dry_run':'true', 'draco':'6', 'webp':'30',
+                'timeout':'900','port':'9222'}
+        response = self.client.post('/api/jobs', data=form, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.data)
+        for _ in range(100):
+            time.sleep(.05)
+            result=self.client.get('/api/status',headers=self.headers).json['job']
+            if result['status'] not in ('starting','running'):break
+        self.assertEqual(result['status'],'completed',result)
+
     def test_library_persistence_screenshot_download_and_safe_delete(self):
         # Generated GLB remains at its original export path after card deletion.
         character = Path(self.temp.name) / 'test-character.zip'

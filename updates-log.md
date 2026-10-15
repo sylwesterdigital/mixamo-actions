@@ -1,3 +1,12 @@
+## v1.2.8 — 2026-10-15
+
+- Fix animation preset imports: picking a JSON file immediately validates, saves and selects it in the preset library; the import control is visible in Library and JSON path modes.
+- Support local `file:///Users/.../animations-males.json` URLs (and ordinary absolute filesystem paths) in JSON path mode; explicitly reject remote/non-local URLs.
+- Preserve multiple animation libraries, avoid duplicate files for identical repeated imports, and never overwrite an existing preset with different contents.
+- Display persistent import progress, selected filename and animation count, or a useful validation error; disable Build during an in-progress preset import.
+- Stage preset uploads and validate before atomic installation, removing invalid uploads; keep original builds, resumable checkpoints, GitHub publishing and scoped static deployment unchanged.
+- Add regression tests for the supplied valid 24-action male preset, local file URLs, duplicate uploads, and invalid files.
+
 ## v1.2.7 — 2026-10-15
 
 - Fix a production resume regression: the saved command includes Python `-u`, which v1.2.6 incorrectly rejected with `409 Saved resume command is invalid` and caused the installer test to fail.

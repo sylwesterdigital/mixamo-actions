@@ -138,3 +138,8 @@
 .library-cards .model-card-label{position:absolute;top:0;left:0;right:0;bottom:auto;z-index:2;}
 .library-cards .model-card-actions{position:absolute;bottom:6px;right:6px;z-index:3;}
 .library-cards .model-thumb img{position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;object-position:center;}
+
+/* v1.2.8: file imports remain visible in both Library and JSON path modes. */
+.preset-import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.preset-import-row .mini-file{flex:0 0 auto;cursor:pointer}
+.preset-import-status{font-size:11px;color:#a6bddb;line-height:1.45;flex:1 1 150px;overflow-wrap:anywhere}

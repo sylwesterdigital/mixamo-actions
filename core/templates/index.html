@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.7</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.8</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -33,8 +33,9 @@
       </section>
       <section class="section"><div class="section-title"><span class="step">02</span><strong>Animation collection</strong><a href="/collector.js" class="quiet-link" title="Download the DevTools animation collector">Collector ↗</a></div>
         <div class="segmented"><button id="presetSavedButton" class="selected" type="button">Library</button><button id="presetPathButton" type="button">JSON path</button></div>
-        <div id="presetSaved"><label for="presetSelect" class="field-label">Saved motion preset</label><select id="presetSelect"><option value="">Select a motion preset…</option>{% for p in presets %}<option value="{{p.filename}}">{{p.name}} · {{p.count}} clips</option>{% endfor %}</select><div class="inline-file"><label for="presetFile" class="mini-file">+ Import JSON<input id="presetFile" type="file" accept=".json"/></label><button id="savePreset" type="button" class="btn compact">Save to library</button></div></div>
-        <div id="presetPath" class="hidden"><label for="presetPathInput" class="field-label">Animation JSON on disk</label><input id="presetPathInput" type="text" placeholder="/path/to/animations.json" spellcheck="false"/></div>
+        <div id="presetSaved"><label for="presetSelect" class="field-label">Saved motion preset</label><select id="presetSelect"><option value="">Select a motion preset…</option>{% for p in presets %}<option value="{{p.filename}}">{{p.name}} · {{p.count}} clips</option>{% endfor %}</select></div>
+        <div id="presetPath" class="hidden"><label for="presetPathInput" class="field-label">Animation JSON on this Mac</label><input id="presetPathInput" type="text" placeholder="/Users/…/animations-males.json or file:///Users/…" spellcheck="false"/><p class="hint">Use an absolute Mac path, or import a file below. Browser file:/// URLs are supported.</p></div>
+        <div class="preset-import-row"><label for="presetFile" class="mini-file" id="presetImportButton">+ Import JSON file<input id="presetFile" type="file" accept=".json,application/json"/></label><span id="presetImportStatus" class="preset-import-status" role="status" aria-live="polite">Choose a JSON file to add it to your library automatically.</span></div>
       </section>
       <section class="section"><div class="section-title"><span class="step">03</span><strong>Export settings</strong><span class="settings-caption">ONE GLB</span></div>
         <div class="settings-grid"><label class="field">Draco <input id="draco" type="number" min="0" max="6" value="6"/></label><label class="field">WebP quality <input id="webp" type="number" min="0" max="100" value="30"/></label></div>

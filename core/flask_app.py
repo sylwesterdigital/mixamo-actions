@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
 from threading import Lock, Thread
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote
 import json
 import os
 import re
@@ -137,6 +137,31 @@ def local_access_only():
     if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith(('/api/rantlist/', '/api/diagnostics')):
         if request.headers.get('X-Local-Token') != APP_TOKEN:
             abort(403)
+
+
+def preset_local_path(value: str) -> Path:
+    """Accept an absolute filesystem path or a local file:/// URL from Finder.
+
+    Never resolve a network file URL, other URL scheme, query string or fragment.
+    """
+    value = (value or '').strip()
+    if not value:
+        raise ValueError('Choose a JSON preset from Library, import a JSON file, or enter its local path')
+    if value.lower().startswith('file:'):
+        parts = urlsplit(value)
+        if (parts.scheme.lower() != 'file' or parts.netloc.lower() not in ('', 'localhost')
+                or parts.query or parts.fragment or not parts.path.startswith('/')):
+            raise ValueError('Only local file:/// paths are supported. Use Import JSON file instead.')
+        value = unquote(parts.path)
+    elif '://' in value:
+        raise ValueError('Use a local filesystem path or import the JSON file; remote URLs are not supported')
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        raise ValueError('Enter an absolute local path or choose Import JSON file')
+    candidate = candidate.resolve()
+    if candidate.suffix.lower() != '.json' or not candidate.is_file():
+        raise ValueError('JSON file not found on this Mac. Choose Import JSON file to upload it into the library.')
+    return candidate
 
 
 def saved_presets():
@@ -526,18 +551,35 @@ def add_preset():
     file = request.files.get('file')
     if not file or not file.filename:
         return respond_error('Select a JSON preset file')
+    staged = None
     try:
         filename = safe_file_name(file.filename, {'.json'})
+        # Accept collector JSON in the browser, but never create an unbounded
+        # or partially validated library file.
+        staged = PRESETS / f'.import-{uuid.uuid4().hex}.tmp'
+        file.save(staged)
+        if staged.stat().st_size > 2 * 1024 * 1024:
+            raise ValueError('Animation JSON exceeds the 2 MiB preset limit')
+        count = validate_preset(staged)
+        incoming_hash = hashlib.sha256(staged.read_bytes()).hexdigest()
         output = PRESETS / filename
         if output.exists():
-            output = PRESETS / f'{Path(filename).stem}_{uuid.uuid4().hex[:6]}.json'
-        file.save(output)
-        count = validate_preset(output)
-        return jsonify(ok=True, filename=output.name, count=count, presets=saved_presets())
-    except Exception as exc:
-        if 'output' in locals():
-            output.unlink(missing_ok=True)
-        return respond_error(exc)
+            if hashlib.sha256(output.read_bytes()).hexdigest() == incoming_hash:
+                return jsonify(ok=True, filename=output.name, count=count, presets=saved_presets(),
+                               alreadySaved=True)
+            # Never silently overwrite a previously saved motion preset.
+            output = PRESETS / f'{Path(filename).stem}_{incoming_hash[:8]}.json'
+            if output.exists() and hashlib.sha256(output.read_bytes()).hexdigest() == incoming_hash:
+                return jsonify(ok=True, filename=output.name, count=count, presets=saved_presets(),
+                               alreadySaved=True)
+        os.replace(staged, output)
+        return jsonify(ok=True, filename=output.name, count=count, presets=saved_presets(),
+                       alreadySaved=False)
+    except (ValueError, OSError, UnicodeError) as exc:
+        return respond_error(f'Cannot import animation JSON: {exc}')
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
 
 
 @app.post('/api/brave/<mode>')
@@ -608,10 +650,7 @@ def start_job():
             if not selection or not preset.is_relative_to(PRESETS) or not preset.is_file():
                 raise ValueError('Choose a saved preset, or upload a JSON preset first')
         elif preset_mode == 'path':
-            selection = request.form.get('preset_path', '').strip()
-            preset = Path(selection).expanduser().resolve()
-            if not selection or not preset.is_file() or preset.suffix.lower() != '.json':
-                raise ValueError('Provide an existing animations.json path')
+            preset = preset_local_path(request.form.get('preset_path', ''))
         else:
             raise ValueError('Invalid animation preset mode')
         count = validate_preset(preset)
