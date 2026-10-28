@@ -1,3 +1,11 @@
+## v1.3.2 — 2026-10-28
+
+- Default Character source to **Use Local model**, automatically selecting the previously loaded, generated model from the Local Library without requiring its original ZIP path or uploading it again.
+- Replace the confusing File path / Upload ZIP / Loaded model modes and the visible Choose file input with one **Upload new ZIP / FBX** button that opens a hidden native file picker only for brand-new characters.
+- Provide an explicit **Choose model in Local Library** shortcut, clear selection status, and early explanations when an imported standalone GLB lacks original Mixamo source provenance.
+- Extend generated characters from preserved source manifests and verified FBX checkpoints, using the selected motion preset to download only missing actions; keep the original model and exports untouched.
+- Keep the legacy local-path backend API for existing CLI clients, but remove it from the Studio interface; do not change any Rantlist server files, Nginx or shared Ubuntu configuration.
+
 ## v1.3.1 — 2026-10-28
 
 - Fix the macOS model-extension installer test: compare canonical physical paths because temporary workspaces under `/var` resolve to `/private/var`, without changing the actual extension output directory.

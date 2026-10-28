@@ -159,3 +159,13 @@
 .preset-add-box{border:1px solid #415471;border-radius:7px;padding:12px;margin:10px 0}
 .preset-add-box legend{padding:0 6px;color:#b5cff2}.preset-add-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .preset-add-fields label{font-size:11px;color:#adc3e1}.preset-editor-footer{justify-content:flex-end;margin-top:16px}
+
+/* v1.3.2: reuse existing generated characters by default; one native upload chooser. */
+.source-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+.source-actions .btn{justify-content:center;text-align:center;padding:9px 6px;min-width:0;white-space:normal}
+.source-actions .btn.selected{background:#45618a;border-color:#82a6df;color:#fff}
+.source-actions #characterFile[hidden]{display:none!important}
+.source-detail{padding:8px 2px 0}
+.source-detail .hint{line-height:1.5;margin:5px 0 8px;overflow-wrap:anywhere}
+.source-detail .source-unavailable{color:#f1a9af}
+#sourcePickModel{margin:4px 0 7px}

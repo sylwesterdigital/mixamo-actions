@@ -33,12 +33,24 @@ On Ubuntu, Brave is typically `brave-browser` and Blender `/usr/bin/blender`. `B
 
 If Playwright reports an authentication or CDP error, use the same troubleshooting steps as the console pipeline. `localhost:9222` must stay private. The Flask UI only confirms the port is open, **not** that Mixamo has accepted the session.
 
-## Character selection: two modes
+## Character selection: Local model or new upload
 
-- **Existing local file** (recommended on the same machine): paste the absolute path to your ZIP/FBX. Exports go next to it in `<filename>-exports/` as before.
-- **Upload ZIP**: use the browser's file picker. Uploaded copy is saved in `~/MixamoLocal/uploads/<unique-id>/<original-filename>` and its exports are generated in the *same uploaded copy folder*. A web file input cannot reveal its original local directory to Flask. The resulting combined GLB and ZIP can be downloaded directly from the page.
+- **Use Local model** (default): click a previously generated model card in the
+  Local Model Library. Choose a preset with additional motion actions and click
+  **Build avatar**. Studio resolves the saved source and verified old FBXs,
+  downloads only missing motions, then creates a new combined GLB in
+  `~/MixamoLocal/extensions/` without changing the original model or exports.
+- **Upload new ZIP / FBX**: one button opens the Mac's native file picker.
+  The underlying file input is hidden; no other "Choose file" or path input
+  is displayed. A new upload is copied to `~/MixamoLocal/uploads/<unique-id>/`.
 
-Presets exported by the draggable JS collector can be uploaded to the local preset library. The library lives in `~/MixamoLocal/presets/`. You may also paste a local existing `animations.json` path instead.
+An imported GLB lacking the original rig's generated export manifest is
+preview-only for this extension workflow. The backend retains local-path
+support for legacy CLI clients, but Studio does not expose that input.
+
+Presets exported by the draggable JS collector can be uploaded to the local
+preset library at `~/MixamoLocal/presets/`. Local JSON files can be imported
+through the Studio preset picker.
 
 ## Processing / results
 

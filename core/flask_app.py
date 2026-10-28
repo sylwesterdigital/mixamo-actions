@@ -694,7 +694,10 @@ def start_job():
             if not value or character.suffix.lower() not in {'.zip', '.fbx'} or not character.is_file():
                 raise ValueError('Provide a valid local .zip or .fbx path')
         elif source_mode == 'library':
-            item = library_lookup(request.form.get('library_id',''))
+            library_id = request.form.get('library_id', '').strip()
+            if not library_id:
+                raise ValueError('Select a generated model from the Local Model Library; no ZIP upload is needed.')
+            item = library_lookup(library_id)
             # Resolve only local generated source, never arbitrary imported GLBs.
             from model_extend import extend_generated_model
             character = None

@@ -13,7 +13,7 @@ with exact motion IDs and exports `animations.json`. Import this JSON using Stud
 resulting list. **The pipeline does not automatically inject the collector** into its
 Playwright-controlled tab; collect motions manually outside a running download job.
 
-## Create or extend animation collections (v1.3.1)
+## Create or extend animation collections (v1.3.2)
 
 **Directly in Studio:** Animation collection → **+ New collection**. Enter a
 name, add each action with a Mixamo search term, title/description and optional
@@ -32,8 +32,9 @@ is running.
 ## Extend an existing generated model without finding its source ZIP
 
 1. In the **Local** Model Library, click a model previously built by this Studio.
-2. Under **Character source**, choose **Loaded model**. Studio names the selected
-   generated model and verifies its original source/animation evidence.
+2. **Use Local model** is selected automatically when you click the generated
+   model. Studio shows its name and reuses the saved source/animation evidence;
+   no new character ZIP, file-picker, or manual path is needed.
 3. Select a saved collection containing new motions, then click **Build avatar**.
    Existing matching motion IDs are filtered out. The original FBX clips are
    SHA-256 verified (or strictly verified against a legacy download manifest).
@@ -49,6 +50,12 @@ from the saved build manifest so you do not have to find it in Finder. The
 Mixamo browser may need to upload the original rig again for new downloads.
 **Imported standalone GLBs and Rantlist remote assets are previewable but
 cannot safely acquire Mixamo actions without the original rig/source.**
+
+To process a genuinely new character, click **Upload new ZIP / FBX** once and
+choose the file using your Mac's native picker. The file input is hidden; the
+selected filename appears below the button. The Studio no longer asks users
+to type the character's file path. The existing backend path API is retained
+only for compatibility with scripts that already use it.
 
 ## Repository layout
 
@@ -71,7 +78,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.3.1.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.3.2.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -79,7 +86,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.3.1.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.3.2.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
 If your watcher is already running, simply save the new versioned ZIP in `updates/`; no command is needed. If the watcher is not running, start **continuous monitoring** once:
 
@@ -162,7 +169,7 @@ The existing server site mapping is left untouched. Deployment copies only five 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.3.1.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.3.2.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -200,7 +207,7 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.3.1.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.3.2.zip ops/install_release.py`,
 and restart the watcher from the repository root.
 
 ### Rantlist Stage integration (v1.2.0)
@@ -239,7 +246,7 @@ remains a foreground process; leave it running without `--once`. When upgrading
 from an older watcher version, restart the watcher once to run the newly installed
 shell code rather than the previous copy held by the existing Bash process.
 
-## Importing animation JSON presets (v1.3.1)
+## Importing animation JSON presets (v1.3.2)
 
 In Studio's **Animation collection** section, click **+ Import JSON file** and
 select any Motion Collector export (e.g. `animations-males.json`). Import runs

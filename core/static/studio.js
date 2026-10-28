@@ -4,7 +4,7 @@
 const init = JSON.parse(document.getElementById('bootstrap').textContent);
 const TOKEN = init.token;
 const $ = id => document.getElementById(id);
-let sourceMode = 'path', presetMode = 'saved', cursor = 0, jobID = null;
+let sourceMode = 'library', presetMode = 'saved', cursor = 0, jobID = null;
 let logArr = [], lastAutoPreview = null, activeJob = null, updatePending = false;
 let libraryModels=[], librarySelection=null, openedLocalFile=null, libraryExpanded=true;
 const getViewer = () => window.MixamoViewer;
@@ -30,20 +30,38 @@ for(const b of document.querySelectorAll('[data-gallery-size]'))b.onclick=()=>se
 for(const b of document.querySelectorAll('[data-gallery-ratio]'))b.onclick=()=>setGalleryLayout(gallerySize,b.dataset.galleryRatio);
 setGalleryLayout();
 const storeKey = 'mixamo-studio-config-v1';
-const fields = ['characterPath','presetPathInput','blender','draco','webp','timeout','port'];
+const fields = ['presetPathInput','blender','draco','webp','timeout','port'];
 const checks = {skip_upload:'skipUpload',skip_download:'skipDownload',confirm_upload:'confirmUpload',require_textures:'requireTextures',no_draco:'noDraco',no_webp:'noWebp',continue_on_error:'continueOnError',dry_run:'dryRun'};
 function setMode(type, mode) {
   const isSource = type === 'source'; if(isSource) sourceMode = mode; else presetMode = mode;
-  const modes = isSource ? ['path','upload','library'] : ['path','saved'];
+  const modes = isSource ? ['upload','library'] : ['path','saved'];
   for (const kind of modes){
     $(type+kind[0].toUpperCase()+kind.slice(1)).classList.toggle('hidden', kind!==mode);
     $(type+kind[0].toUpperCase()+kind.slice(1)+'Button').classList.toggle('selected',kind===mode);
+    $(type+kind[0].toUpperCase()+kind.slice(1)+'Button').setAttribute('aria-pressed',String(kind===mode));
   }
   storeSettings();
 }
-$('sourcePathButton').onclick = () => setMode('source','path');
-$('sourceUploadButton').onclick = () => setMode('source','upload');
+// The single upload button opens a native picker; the file input is never shown.
+// Do not enter upload mode until a file has actually been chosen.
+$('sourceUploadButton').onclick=()=>$('characterFile').click();
+$('characterFile').addEventListener('change',()=>{
+  const file=$('characterFile').files?.[0];
+  if(!file)return;
+  if(!/\.(zip|fbx)$/i.test(file.name)||!file.size){
+    $('characterFile').value='';feedback('Choose a nonempty character ZIP or FBX file.');return;
+  }
+  $('sourceUploadName').textContent=`New character: ${file.name}. Ready to build.`;
+  setMode('source','upload');
+  feedback(`Selected ${file.name} for a new character build.`,true);
+});
 $('sourceLibraryButton').onclick=()=>{setMode('source','library');updateSourceLibraryName();};
+$('sourcePickModel').onclick=()=>{
+  $('galleryLocal').click();setLibraryExpanded(true);
+  const selected=$('libraryCards').querySelector('.model-card.selected');
+  selected?.scrollIntoView({block:'nearest',inline:'nearest'});
+  if(!librarySelection)showViewerNotice('Click a previously generated model in your Local Library to add more animations.');
+};
 $('presetPathButton').onclick = () => setMode('preset','path');
 $('presetSavedButton').onclick = () => setMode('preset','saved');
 for(const button of document.querySelectorAll('.sidebar-tabs .tab')) button.onclick=()=>openTab(button.dataset.tab);
@@ -60,7 +78,7 @@ try{
   if(state.fields)for(const [key,value] of Object.entries(state.fields))if($(key))$(key).value=value;
   if(state.checks)for(const [key,value]of Object.entries(state.checks))if($(key))$(key).checked=!!value;
   if(state.preset && Array.from($('presetSelect').options).some(o=>o.value===state.preset))$('presetSelect').value=state.preset;
-  setMode('source',['path','upload','library'].includes(state.sourceMode)?state.sourceMode:'path');
+  setMode('source',state.sourceMode==='upload' && $('characterFile').files?.length?'upload':'library');
   setMode('preset',state.presetMode==='path'?'path':'saved');
 }catch{}
 for(const id of [...fields,...Object.values(checks),'presetSelect'])$(id).addEventListener('change',storeSettings);
@@ -154,7 +172,11 @@ $('presetEditorSave').onclick=async()=>{
 window.MixamoStudioSceneSource={remote(){librarySelection=null;rememberLibrarySelection();renderLibrary();}};
 function updateSourceLibraryName(){
   const m=libraryModels.find(item=>item.id===librarySelection);
-  $('sourceLibraryName').textContent=m?(m.canExtend?`Selected: ${m.name} · ${m.clips||'?'} clips. New actions will be added in a separate GLB.`:`Selected: ${m.name}. No original Mixamo source is available for this imported GLB.`):'Select a locally generated model card to extend.';
+  $('sourceLibraryName').textContent=m?
+    (m.canExtend?`Selected: ${m.name} · ${m.clips??'?'} existing clips. Pick a motion collection and Build to add missing actions.`:
+      `Selected: ${m.name}. This GLB was imported without its original rig and cannot be extended. Choose a generated model.`):
+    'Select a previously generated model from your Local Model Library below. No ZIP upload is required.';
+  $('sourceLibraryName').classList.toggle('source-unavailable',!!m&&!m.canExtend);
 }
 let presetImportBusy=false, lastPresetImportAt=0;
 $('presetFile').addEventListener('change',async()=>{
@@ -189,8 +211,7 @@ $('presetFile').addEventListener('change',async()=>{
 });
 function buildForm(){
   const d=new FormData();d.set('source_mode',sourceMode);d.set('preset_mode',presetMode);
-  if(sourceMode==='path')d.set('character_path',$('characterPath').value.trim());
-  else if(sourceMode==='upload' && $('characterFile').files[0])d.set('character_file',$('characterFile').files[0]);
+  if(sourceMode==='upload' && $('characterFile').files[0])d.set('character_file',$('characterFile').files[0]);
   else if(sourceMode==='library')d.set('library_id',librarySelection||'');
   if(presetMode==='saved')d.set('preset',$('presetSelect').value);else d.set('preset_path',$('presetPathInput').value.trim());
   for(const id of ['draco','webp','timeout','port','blender'])d.set(id,$(id).value);
@@ -199,6 +220,13 @@ function buildForm(){
 }
 $('start').onclick=async()=>{
   if(presetImportBusy)return feedback('Wait until the animation JSON import finishes.');
+  if(sourceMode==='library'){
+    const selected=libraryModels.find(m=>m.id===librarySelection);
+    if(!selected)return feedback('Select a previously generated model in the Local Model Library first.');
+    if(!selected.canExtend)return feedback('This imported GLB has no original source. Select a generated model instead.');
+  }else if(!$('characterFile').files?.[0]){
+    return feedback('Choose a character ZIP or FBX with Upload new ZIP / FBX.');
+  }
   feedback('');storeSettings();$('start').disabled=true;
   try{const r=await send('/api/jobs',{method:'POST',body:buildForm()});cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;showViewerNotice(r.extension?`Extending model: ${r.extension.reused} existing FBXs reused, ${r.extension.remaining} additional clips needed`:`Build started · ${r.animations} animations`);renderJob(r.job);}
   catch(e){feedback(e.message);$('start').disabled=false;}
@@ -310,7 +338,7 @@ async function loadLatestPreview(){
     await getViewer().load(url,label);
     await refreshLibrary();
     const found=libraryModels.find(m=>m.jobId===activeJob.id);
-    if(found){librarySelection=found.id;rememberLibrarySelection();renderLibrary();await captureForLibrary(found.id);}
+    if(found){librarySelection=found.id;rememberLibrarySelection();setMode('source','library');renderLibrary();await captureForLibrary(found.id);}
     $('saveCurrent').disabled=true;
   }catch(e){showViewerNotice(`Preview failed: ${e.message}`,true);}
 }
@@ -337,7 +365,7 @@ window.addEventListener('mixamo-viewer-ready',()=>{
       if(a.file){openedLocalFile=a.file;librarySelection=null;$('saveCurrent').disabled=false;renderLibrary();}
       else if(a.jobId){
         await refreshLibrary();const found=libraryModels.find(m=>m.jobId===a.jobId);
-        if(found){librarySelection=found.id;rememberLibrarySelection();renderLibrary();await captureForLibrary(found.id);}
+        if(found){librarySelection=found.id;rememberLibrarySelection();setMode('source','library');renderLibrary();await captureForLibrary(found.id);}
       }
     }).catch(e=>showViewerNotice(e.message,true));
   }
@@ -356,7 +384,9 @@ function restoreSavedSelection(){
   restoringScene=true;
   getViewer().load(selected.glbUrl,selected.name).then(()=>{
     if(sceneTouched)return;
-    librarySelection=selected.id;rememberLibrarySelection();renderLibrary();updateSourceLibraryName();
+    librarySelection=selected.id;rememberLibrarySelection();
+    if(!$('characterFile').files?.length)setMode('source','library');
+    renderLibrary();updateSourceLibraryName();
   }).catch(e=>console.warn('Could not restore last model',e)).finally(()=>{restoringScene=false;});
 }
 async function refreshLibrary(){
@@ -446,7 +476,8 @@ async function loadLibraryModel(item){
     if(!getViewer())throw new Error('Three.js viewer has not loaded');
     sceneTouched=true;
     await getViewer().load(item.glbUrl,item.name);
-    librarySelection=item.id;rememberLibrarySelection();openedLocalFile=null;$('saveCurrent').disabled=true;renderLibrary();
+    librarySelection=item.id;rememberLibrarySelection();openedLocalFile=null;$('saveCurrent').disabled=true;
+    setMode('source','library');renderLibrary();
     if(!item.thumbnailUrl)await captureForLibrary(item.id);
   }catch(e){showViewerNotice('Cannot open library model: '+e.message,true);}
 }
@@ -457,7 +488,8 @@ $('saveCurrent').onclick=async()=>{
   $('saveCurrent').disabled=true;
   try{
     const response=await send('/api/library/import',{method:'POST',body});
-    librarySelection=response.model.id;rememberLibrarySelection();openedLocalFile=null;await refreshLibrary();await captureForLibrary(librarySelection);
+    librarySelection=response.model.id;rememberLibrarySelection();openedLocalFile=null;
+    setMode('source','library');await refreshLibrary();await captureForLibrary(librarySelection);
     showViewerNotice('Saved to Model Library');
   }catch(e){$('saveCurrent').disabled=false;feedback(e.message);}
 };

@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.1</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.2</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -27,10 +27,17 @@
     <div class="sidebar-tabs"><button type="button" class="tab active" data-tab="pipeline">Build</button><button type="button" class="tab" data-tab="activity">Activity <span id="activityCount">0</span></button></div>
     <div id="tab-pipeline" class="tab-body">
       <section class="section"><div class="section-title"><span class="step">01</span><strong>Character source</strong></div>
-        <div class="segmented"><button id="sourcePathButton" class="selected" type="button">File path</button><button id="sourceUploadButton" type="button">Upload ZIP</button><button id="sourceLibraryButton" type="button">Loaded model</button></div>
-        <div id="sourcePath"><label for="characterPath" class="field-label">Rigged FBX / Tripo ZIP on disk</label><input id="characterPath" type="text" placeholder="/Users/…/character.zip" spellcheck="false" autocomplete="off"/></div>
-        <div id="sourceLibrary" class="hidden"><p id="sourceLibraryName" class="hint">Select a locally generated model card to extend.</p><p class="hint">Verified old actions are preserved; only new motions are downloaded. Imported/remote GLBs require their original rig source.</p></div>
-        <div id="sourceUpload" class="hidden"><label class="field-label" for="characterFile">Upload ZIP or FBX</label><input id="characterFile" type="file" accept=".zip,.fbx"/><p class="hint">Outputs saved to the local upload workspace.</p></div>
+        <div class="source-actions" role="group" aria-label="Character source">
+          <button id="sourceLibraryButton" class="btn selected" type="button">Use Local model</button>
+          <button id="sourceUploadButton" class="btn" type="button">Upload new ZIP / FBX</button>
+          <input id="characterFile" type="file" accept=".zip,.fbx" hidden aria-label="Select new character ZIP or FBX"/>
+        </div>
+        <div id="sourceLibrary" class="source-detail">
+          <p id="sourceLibraryName" class="hint" role="status">Select a generated model from your Local Model Library below.</p>
+          <button id="sourcePickModel" class="btn compact" type="button">Choose model in Local Library ↓</button>
+          <p class="hint">Already generated? Studio reuses the saved source and verified animations. Select a collection with new actions; the original GLB stays unchanged.</p>
+        </div>
+        <div id="sourceUpload" class="source-detail hidden"><p id="sourceUploadName" class="hint" role="status">No new character selected.</p><p class="hint">Only use this for a new character. Your existing local models do not need another ZIP.</p></div>
       </section>
       <section class="section"><div class="section-title"><span class="step">02</span><strong>Animation collection</strong><a href="/collector.js" class="quiet-link" title="Download the DevTools animation collector">Collector ↗</a></div>
         <div class="segmented"><button id="presetSavedButton" class="selected" type="button">Library</button><button id="presetPathButton" type="button">JSON path</button></div>

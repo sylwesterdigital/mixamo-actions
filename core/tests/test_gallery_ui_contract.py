@@ -3,6 +3,27 @@ import unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class GalleryUIContractTests(unittest.TestCase):
+    def test_existing_generated_model_is_default_and_upload_has_only_one_button(self):
+        markup=(ROOT/'templates/index.html').read_text()
+        js=(ROOT/'static/studio.js').read_text()
+        css=(ROOT/'static/studio.css').read_text()
+        backend=(ROOT/'flask_app.py').read_text()
+        self.assertIn('Use Local model',markup)
+        self.assertIn('Upload new ZIP / FBX',markup)
+        self.assertIn('id="characterFile" type="file" accept=".zip,.fbx" hidden',markup)
+        self.assertNotIn('id="characterPath"',markup)
+        self.assertNotIn('id="sourcePathButton"',markup)
+        self.assertIn("let sourceMode = 'library'",js)
+        self.assertIn("$('sourceUploadButton').onclick=()=>$('characterFile').click()",js)
+        self.assertIn("setMode('source','upload')",js)
+        self.assertIn("setMode('source','library')",js)
+        self.assertIn("d.set('library_id',librarySelection||'')",js)
+        self.assertIn('Select a previously generated model',js)
+        self.assertIn('.source-actions',css)
+        self.assertIn('if not library_id:',backend)
+        self.assertNotIn("if(sourceMode==='path')",js)
+        self.assertIn('extend_generated_model(extension_item, preset, WORKSPACE)',backend)
+
     def test_publisher_uses_model_name_not_native_prompt(self):
         controller=(ROOT/'static/studio.js').read_text()
         frontend=(ROOT/'static/rantlist.js').read_text()
