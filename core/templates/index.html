@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.2.8</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.1</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -27,14 +27,16 @@
     <div class="sidebar-tabs"><button type="button" class="tab active" data-tab="pipeline">Build</button><button type="button" class="tab" data-tab="activity">Activity <span id="activityCount">0</span></button></div>
     <div id="tab-pipeline" class="tab-body">
       <section class="section"><div class="section-title"><span class="step">01</span><strong>Character source</strong></div>
-        <div class="segmented"><button id="sourcePathButton" class="selected" type="button">File path</button><button id="sourceUploadButton" type="button">Upload ZIP</button></div>
+        <div class="segmented"><button id="sourcePathButton" class="selected" type="button">File path</button><button id="sourceUploadButton" type="button">Upload ZIP</button><button id="sourceLibraryButton" type="button">Loaded model</button></div>
         <div id="sourcePath"><label for="characterPath" class="field-label">Rigged FBX / Tripo ZIP on disk</label><input id="characterPath" type="text" placeholder="/Users/…/character.zip" spellcheck="false" autocomplete="off"/></div>
+        <div id="sourceLibrary" class="hidden"><p id="sourceLibraryName" class="hint">Select a locally generated model card to extend.</p><p class="hint">Verified old actions are preserved; only new motions are downloaded. Imported/remote GLBs require their original rig source.</p></div>
         <div id="sourceUpload" class="hidden"><label class="field-label" for="characterFile">Upload ZIP or FBX</label><input id="characterFile" type="file" accept=".zip,.fbx"/><p class="hint">Outputs saved to the local upload workspace.</p></div>
       </section>
       <section class="section"><div class="section-title"><span class="step">02</span><strong>Animation collection</strong><a href="/collector.js" class="quiet-link" title="Download the DevTools animation collector">Collector ↗</a></div>
         <div class="segmented"><button id="presetSavedButton" class="selected" type="button">Library</button><button id="presetPathButton" type="button">JSON path</button></div>
         <div id="presetSaved"><label for="presetSelect" class="field-label">Saved motion preset</label><select id="presetSelect"><option value="">Select a motion preset…</option>{% for p in presets %}<option value="{{p.filename}}">{{p.name}} · {{p.count}} clips</option>{% endfor %}</select></div>
         <div id="presetPath" class="hidden"><label for="presetPathInput" class="field-label">Animation JSON on this Mac</label><input id="presetPathInput" type="text" placeholder="/Users/…/animations-males.json or file:///Users/…" spellcheck="false"/><p class="hint">Use an absolute Mac path, or import a file below. Browser file:/// URLs are supported.</p></div>
+        <div class="preset-editor-actions"><button type="button" class="btn compact" id="presetNew">+ New collection</button><button type="button" class="btn compact" id="presetEdit">Edit selected</button></div>
         <div class="preset-import-row"><label for="presetFile" class="mini-file" id="presetImportButton">+ Import JSON file<input id="presetFile" type="file" accept=".json,application/json"/></label><span id="presetImportStatus" class="preset-import-status" role="status" aria-live="polite">Choose a JSON file to add it to your library automatically.</span></div>
       </section>
       <section class="section"><div class="section-title"><span class="step">03</span><strong>Export settings</strong><span class="settings-caption">ONE GLB</span></div>
@@ -101,6 +103,19 @@
   </main>
 </div>
 </div>
+<dialog id="presetEditor" class="preset-editor-dialog" aria-labelledby="presetEditorTitle">
+  <div class="preset-editor-head"><h2 id="presetEditorTitle">Motion collection</h2><button type="button" id="presetEditorClose" class="btn">×</button></div>
+  <p class="hint">Add exact motions found with the Mixamo Collector, or edit an imported preset. Existing models and presets remain unchanged until you save.</p>
+  <label class="field">Collection name<input id="editPresetName" maxlength="100" placeholder="My action collection"/></label>
+  <div class="preset-edit-table" id="presetEditList" aria-live="polite"></div>
+  <fieldset class="preset-add-box"><legend>Add a motion</legend>
+    <div class="preset-add-fields"><label>Search<input id="actionSearch" placeholder="walk"/></label><label>Title<input id="actionTitle" placeholder="Walking"/></label>
+    <label>Description<input id="actionDescription" placeholder="Walking with a swagger"/></label><label>Motion ID<input id="actionMotionId" placeholder="118080901"/></label></div>
+    <button type="button" id="presetAddAction" class="btn compact">+ Add action</button>
+  </fieldset>
+  <p id="presetEditorStatus" role="status" class="hint"></p>
+  <div class="preset-editor-footer"><button type="button" id="presetEditorCancel" class="btn">Cancel</button><button type="button" id="presetEditorSave" class="btn primary">Save collection</button></div>
+</dialog>
 <script id="bootstrap" type="application/json">{{ {'token':token,'presets':presets,'session':session,'workspace':workspace}|tojson }}</script>
 <script defer src="{{ url_for('static', filename='studio.js') }}"></script>
 <script defer src="{{ url_for('static', filename='rantlist.js') }}"></script>

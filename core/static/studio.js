@@ -34,14 +34,16 @@ const fields = ['characterPath','presetPathInput','blender','draco','webp','time
 const checks = {skip_upload:'skipUpload',skip_download:'skipDownload',confirm_upload:'confirmUpload',require_textures:'requireTextures',no_draco:'noDraco',no_webp:'noWebp',continue_on_error:'continueOnError',dry_run:'dryRun'};
 function setMode(type, mode) {
   const isSource = type === 'source'; if(isSource) sourceMode = mode; else presetMode = mode;
-  const second = isSource ? 'upload' : 'saved';
-  for (const kind of ['path', second]) $(type+kind[0].toUpperCase()+kind.slice(1)).classList.toggle('hidden', kind !== mode);
-  $(type+'PathButton').classList.toggle('selected', mode==='path');
-  $(type+(isSource?'Upload':'Saved')+'Button').classList.toggle('selected', mode!== 'path');
+  const modes = isSource ? ['path','upload','library'] : ['path','saved'];
+  for (const kind of modes){
+    $(type+kind[0].toUpperCase()+kind.slice(1)).classList.toggle('hidden', kind!==mode);
+    $(type+kind[0].toUpperCase()+kind.slice(1)+'Button').classList.toggle('selected',kind===mode);
+  }
   storeSettings();
 }
 $('sourcePathButton').onclick = () => setMode('source','path');
 $('sourceUploadButton').onclick = () => setMode('source','upload');
+$('sourceLibraryButton').onclick=()=>{setMode('source','library');updateSourceLibraryName();};
 $('presetPathButton').onclick = () => setMode('preset','path');
 $('presetSavedButton').onclick = () => setMode('preset','saved');
 for(const button of document.querySelectorAll('.sidebar-tabs .tab')) button.onclick=()=>openTab(button.dataset.tab);
@@ -58,7 +60,7 @@ try{
   if(state.fields)for(const [key,value] of Object.entries(state.fields))if($(key))$(key).value=value;
   if(state.checks)for(const [key,value]of Object.entries(state.checks))if($(key))$(key).checked=!!value;
   if(state.preset && Array.from($('presetSelect').options).some(o=>o.value===state.preset))$('presetSelect').value=state.preset;
-  setMode('source',state.sourceMode==='upload'?'upload':'path');
+  setMode('source',['path','upload','library'].includes(state.sourceMode)?state.sourceMode:'path');
   setMode('preset',state.presetMode==='path'?'path':'saved');
 }catch{}
 for(const id of [...fields,...Object.values(checks),'presetSelect'])$(id).addEventListener('change',storeSettings);
@@ -88,6 +90,71 @@ function refreshPresets(items){
   for(const p of items) list.add(new Option(`${p.name} · ${p.count} clips`,p.filename));
   if(Array.from(list.options).some(o=>o.value===selected)) list.value=selected;
   else try{const st=JSON.parse(localStorage.getItem(storeKey)||'{}');if(st.preset)list.value=st.preset;}catch{}
+}
+// Local collection editor. The Mixamo collector remains the source of exact motion IDs.
+let editorEntries=[], editorOriginal=null, editorDigest=null;
+const editor=$('presetEditor');
+function renderEditorEntries(){
+  const list=$('presetEditList');list.replaceChildren();
+  editorEntries.forEach((entry,index)=>{
+    const row=document.createElement('div');row.className='preset-edit-item';
+    const title=document.createElement('span');
+    title.textContent=(typeof entry==='string'?entry:entry.title||entry.search||'Motion')+
+      (entry.motionId?' · '+entry.motionId:'');
+    const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove this action';
+    remove.onclick=()=>{editorEntries.splice(index,1);renderEditorEntries();};
+    row.append(title,remove);list.append(row);
+  });
+  $('presetEditorStatus').textContent=`${editorEntries.length} actions in this collection`;
+}
+function resetEditor(){
+  editorEntries=[];editorOriginal=null;editorDigest=null;
+  $('editPresetName').value='';
+  renderEditorEntries();editor.showModal();
+}
+$('presetNew').onclick=resetEditor;
+$('presetEdit').onclick=async()=>{
+  const selected=$('presetSelect').value;
+  if(!selected)return feedback('Select a collection to edit, or click New collection.');
+  try{
+    const data=await send('/api/presets/'+encodeURIComponent(selected));
+    editorOriginal=data.filename;editorDigest=data.sha256;
+    const content=data.content;
+    editorEntries=structuredClone(Array.isArray(content)?content:content.animations);
+    $('editPresetName').value=Array.isArray(content)?selected.replace(/\.json$/i,''):(content.presetName||selected.replace(/\.json$/i,''));
+    renderEditorEntries();editor.showModal();
+  }catch(e){feedback(e.message);}
+};
+$('presetEditorClose').onclick=$('presetEditorCancel').onclick=()=>editor.close();
+$('presetAddAction').onclick=()=>{
+  const search=$('actionSearch').value.trim(),title=$('actionTitle').value.trim();
+  const motionId=$('actionMotionId').value.trim(),description=$('actionDescription').value.trim();
+  if(!search && !title){$('presetEditorStatus').textContent='Enter a search term or title.';return;}
+  if(motionId && !/^\d{4,20}$/.test(motionId)){$('presetEditorStatus').textContent='Motion ID must be numeric.';return;}
+  const entry={search:search||title,title:title||search};
+  if(description)entry.description=description;
+  if(motionId){entry.motionId=motionId;entry.filename=(title||search).replace(/[^a-z0-9 _-]/gi,'').trim()+'__'+motionId;}
+  if(editorEntries.some(e=>e.motionId && e.motionId===motionId && motionId)){
+    $('presetEditorStatus').textContent='This motion ID is already in the collection.';return;
+  }
+  editorEntries.push(entry);
+  for(const id of ['actionSearch','actionTitle','actionDescription','actionMotionId'])$(id).value='';
+  renderEditorEntries();
+};
+$('presetEditorSave').onclick=async()=>{
+  const button=$('presetEditorSave');button.disabled=true;
+  try{
+    const data=await send('/api/presets/edit',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:$('editPresetName').value,animations:editorEntries,original:editorOriginal,sha256:editorDigest})});
+    refreshPresets(data.presets);setMode('preset','saved');$('presetSelect').value=data.filename;
+    storeSettings();editor.close();feedback(`Saved ${data.filename} · ${data.count} motions`,true);
+  }catch(e){$('presetEditorStatus').textContent=e.message;}
+  finally{button.disabled=false;}
+};
+window.MixamoStudioSceneSource={remote(){librarySelection=null;rememberLibrarySelection();renderLibrary();}};
+function updateSourceLibraryName(){
+  const m=libraryModels.find(item=>item.id===librarySelection);
+  $('sourceLibraryName').textContent=m?(m.canExtend?`Selected: ${m.name} · ${m.clips||'?'} clips. New actions will be added in a separate GLB.`:`Selected: ${m.name}. No original Mixamo source is available for this imported GLB.`):'Select a locally generated model card to extend.';
 }
 let presetImportBusy=false, lastPresetImportAt=0;
 $('presetFile').addEventListener('change',async()=>{
@@ -123,7 +190,8 @@ $('presetFile').addEventListener('change',async()=>{
 function buildForm(){
   const d=new FormData();d.set('source_mode',sourceMode);d.set('preset_mode',presetMode);
   if(sourceMode==='path')d.set('character_path',$('characterPath').value.trim());
-  else if($('characterFile').files[0])d.set('character_file',$('characterFile').files[0]);
+  else if(sourceMode==='upload' && $('characterFile').files[0])d.set('character_file',$('characterFile').files[0]);
+  else if(sourceMode==='library')d.set('library_id',librarySelection||'');
   if(presetMode==='saved')d.set('preset',$('presetSelect').value);else d.set('preset_path',$('presetPathInput').value.trim());
   for(const id of ['draco','webp','timeout','port','blender'])d.set(id,$(id).value);
   for(const [f,id]of Object.entries(checks))d.set(f,$(id).checked?'true':'false');
@@ -132,7 +200,7 @@ function buildForm(){
 $('start').onclick=async()=>{
   if(presetImportBusy)return feedback('Wait until the animation JSON import finishes.');
   feedback('');storeSettings();$('start').disabled=true;
-  try{const r=await send('/api/jobs',{method:'POST',body:buildForm()});cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;showViewerNotice(`Build started · ${r.animations} animations`);renderJob(r.job);}
+  try{const r=await send('/api/jobs',{method:'POST',body:buildForm()});cursor=0;logArr=[];jobID=r.job.id;lastAutoPreview=null;showViewerNotice(r.extension?`Extending model: ${r.extension.reused} existing FBXs reused, ${r.extension.remaining} additional clips needed`:`Build started · ${r.animations} animations`);renderJob(r.job);}
   catch(e){feedback(e.message);$('start').disabled=false;}
 };
 $('resumeBuild').onclick=async()=>{
@@ -288,7 +356,7 @@ function restoreSavedSelection(){
   restoringScene=true;
   getViewer().load(selected.glbUrl,selected.name).then(()=>{
     if(sceneTouched)return;
-    librarySelection=selected.id;rememberLibrarySelection();renderLibrary();
+    librarySelection=selected.id;rememberLibrarySelection();renderLibrary();updateSourceLibraryName();
   }).catch(e=>console.warn('Could not restore last model',e)).finally(()=>{restoringScene=false;});
 }
 async function refreshLibrary(){
@@ -334,7 +402,7 @@ libraryHandle.addEventListener('keydown',e=>{
 });
 try{setLibraryExpanded(JSON.parse(localStorage.getItem('mixamo-library-expanded')||'true'));}
 catch{setLibraryExpanded(true);}
-function renderLibrary(){
+function renderLibrary(){updateSourceLibraryName();
   const host=$('libraryCards');host.replaceChildren();
   $('libraryCount').textContent=String(libraryModels.length);
   if(!libraryModels.length){const empty=document.createElement('p');empty.className='library-empty';empty.textContent='Build an avatar or open a GLB and choose Save to Library.';host.append(empty);return;}

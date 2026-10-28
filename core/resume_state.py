@@ -17,7 +17,7 @@ CHECKPOINT = '.mixamo-resume.json'
 
 
 def valid_resume_command(command, *, executable: str, pipeline: Path,
-                         character: Path, preset: Path) -> bool:
+                         character: Path, preset: Path, output: Path | None = None) -> bool:
     """Accept only commands written by the local Studio, including Python -u.
 
     Check the input paths against the SHA-verified saved job before launching a
@@ -33,7 +33,7 @@ def valid_resume_command(command, *, executable: str, pipeline: Path,
         args = command[2:]
     else:
         return False
-    paired = {'--cdp', '--character', '--animations', '--blender',
+    paired = {'--cdp', '--character', '--animations', '--blender', '--out',
               '--draco-level', '--webp-quality', '--manual-rig-timeout'}
     switches = {'--skip-download', '--skip-upload', '--confirm-upload',
                 '--require-textures', '--no-draco', '--no-webp',
@@ -53,7 +53,8 @@ def valid_resume_command(command, *, executable: str, pipeline: Path,
             seen[flag] = True
             i += 1
     return (seen.get('--character') == str(character) and
-            seen.get('--animations') == str(preset))
+            seen.get('--animations') == str(preset) and
+            (seen.get('--out') is None or (output is not None and seen['--out'] == str(output))))
 
 
 def digest(path: Path) -> str:

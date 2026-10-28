@@ -308,7 +308,7 @@ def _library_public(entry):
                 created=entry['created'], clips=entry.get('clips'),
                 glbUrl=f"/api/library/{entry['id']}/glb",
                 downloadUrl=f"/api/library/{entry['id']}/download",
-                jobId=entry.get('jobId'),
+                jobId=entry.get('jobId'), canExtend=entry.get('source') == 'generated',
                 thumbnailUrl=f"/api/library/{entry['id']}/thumbnail" if (LIBRARY_THUMBS / (entry['id'] + '.webp')).is_file() else None)
     return item
 
@@ -334,7 +334,7 @@ def register_generated(job):
         if previous and (previous.get('size') != size or previous.get('mtime') != modified):
             (LIBRARY_THUMBS / (key + '.webp')).unlink(missing_ok=True)
         entries = [e for e in entries if e['id'] != key]
-        entries.append(dict(id=key, path=canonical, name=job['character'].stem,
+        entries.append(dict(id=key, path=canonical, name=job.get('modelLabel') or job['character'].stem,
                             source='generated', created=now(), size=size, mtime=modified, clips=None, jobId=job['id']))
         _save_library(entries)
     return key
@@ -582,6 +582,68 @@ def add_preset():
             staged.unlink(missing_ok=True)
 
 
+@app.get('/api/presets/<name>')
+def get_preset_for_edit(name):
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+\.json', name) or name.startswith('.'):
+        return respond_error('Invalid preset filename')
+    target = PRESETS / name
+    if not target.is_file() or target.is_symlink():
+        abort(404)
+    try:
+        validate_preset(target)
+        content = json.loads(target.read_text(encoding='utf-8'))
+        return jsonify(filename=name, content=content, sha256=hashlib.sha256(target.read_bytes()).hexdigest())
+    except (OSError, ValueError) as exc:
+        return respond_error(f'Cannot load preset: {exc}')
+
+
+@app.post('/api/presets/edit')
+def save_edited_preset():
+    """Explicitly create or update a preset, with optimistic concurrency."""
+    payload = request.get_json(silent=True) or {}
+    name = payload.get('name')
+    animations = payload.get('animations')
+    if not isinstance(name, str) or not name.strip() or len(name) > 100:
+        return respond_error('Provide a collection name (up to 100 characters).')
+    if not isinstance(animations, list) or not animations or len(animations) > 500:
+        return respond_error('Add at least one action (maximum 500).')
+    original = payload.get('original')
+    if original is not None:
+        if not isinstance(original,str) or not re.fullmatch(r'[A-Za-z0-9_.-]+\.json',original) or original.startswith('.'):
+            return respond_error('Invalid original collection filename.')
+        filename = original  # Update content, never rename/move the existing file.
+    else:
+        filename = secure_filename(name.strip())
+        if not filename:
+            return respond_error('Collection name cannot be used as a filename.')
+        if not filename.lower().endswith('.json'):
+            filename += '.json'
+    target = PRESETS / filename
+    if target.is_symlink():
+        return respond_error('Preset symlinks cannot be edited.')
+    original = payload.get('original')
+    if target.exists():
+        expected = payload.get('sha256')
+        if not original or not isinstance(expected,str) or expected != hashlib.sha256(target.read_bytes()).hexdigest():
+            return respond_error('Collection has changed or already exists. Refresh it before overwriting.', 409)
+    elif original:
+        return respond_error('Collection no longer exists.', 409)
+    staged = PRESETS / ('.editor-' + uuid.uuid4().hex + '.tmp')
+    try:
+        content = {'presetName':name.strip(), 'animations':animations}
+        encoded = (json.dumps(content,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
+        if len(encoded) > 2*1024*1024:
+            raise ValueError('Collection exceeds 2 MiB.')
+        staged.write_bytes(encoded)
+        count = validate_preset(staged)
+        os.replace(staged,target)
+        return jsonify(ok=True, filename=filename, count=count, presets=saved_presets())
+    except (OSError,ValueError,TypeError) as exc:
+        return respond_error(f'Cannot save collection: {exc}')
+    finally:
+        staged.unlink(missing_ok=True)
+
+
 @app.post('/api/brave/<mode>')
 def launch_brave(mode):
     if mode not in {'login', 'automate'}:
@@ -625,11 +687,18 @@ def start_job():
             return respond_error('Another pipeline job is already running.', 409)
     try:
         source_mode = request.form.get('source_mode', 'path')
+        extension = None
         if source_mode == 'path':
             value = request.form.get('character_path', '').strip()
             character = Path(value).expanduser().resolve()
             if not value or character.suffix.lower() not in {'.zip', '.fbx'} or not character.is_file():
                 raise ValueError('Provide a valid local .zip or .fbx path')
+        elif source_mode == 'library':
+            item = library_lookup(request.form.get('library_id',''))
+            # Resolve only local generated source, never arbitrary imported GLBs.
+            from model_extend import extend_generated_model
+            character = None
+            extension_item = item
         elif source_mode == 'upload':
             file = request.files.get('character_file')
             if not file or not file.filename:
@@ -661,11 +730,20 @@ def start_job():
         if not blender.is_file():
             raise ValueError(f'Blender executable not found: {blender}')
         port = int_value('port', 9222, 1024, 65535)
-        output = character.parent / f'{character.stem}-exports'
+        if source_mode == 'library':
+            extension = extend_generated_model(extension_item, preset, WORKSPACE)
+            character = extension['character']
+            preset = extension['preset']
+            count = extension['total']
+            output = extension['output']
+        else:
+            output = character.parent / f'{character.stem}-exports'
         command = [sys.executable, '-u', str(ROOT / 'mixamo_pipeline.py'),
                    '--cdp', f'http://127.0.0.1:{port}', '--character', str(character),
                    '--animations', str(preset), '--draco-level', str(draco), '--webp-quality', str(webp),
                    '--manual-rig-timeout', str(timeout), '--blender', str(blender)]
+        if extension is not None:
+            command.extend(['--out', str(output)])
         for field, flag in [('skip_download', '--skip-download'), ('skip_upload', '--skip-upload'),
                             ('confirm_upload', '--confirm-upload'), ('require_textures', '--require-textures'),
                             ('no_draco', '--no-draco'), ('no_webp', '--no-webp'),
@@ -679,7 +757,8 @@ def start_job():
                'id': jid, 'status': 'starting', 'phase': 'Preparing', 'started': now(), 'finished': None,
                'character': character, 'output': output, 'lines': deque(maxlen=2000), 'next_index': 0,
                'first_index': 0, 'process': None, 'returncode': None, 'error': None,
-               'cancel_requested': False, 'animations': count}
+               'cancel_requested': False, 'animations': count,
+               'modelLabel': (f"{extension_item['name']} +{extension['added']} actions" if extension else None)}
         with STATE_LOCK:
             if STATE['job'] and STATE['job']['status'] in ('starting', 'running'):
                 return respond_error('Another pipeline job is already running', 409)
@@ -688,7 +767,7 @@ def start_job():
         Thread(target=worker, args=(job, command), daemon=True).start()
         with STATE_LOCK:
             snapshot = public_job(job)
-        return jsonify(ok=True, job=snapshot, animations=count)
+        return jsonify(ok=True, job=snapshot, animations=count, extension=({k:extension[k] for k in ('previous','added','reused','total','remaining')} if extension else None))
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         return respond_error(exc)
 
@@ -716,7 +795,7 @@ def resume_job():
         # verified pipeline entrypoint. No shell, no user-controlled executable.
         if not valid_resume_command(command, executable=sys.executable,
                                     pipeline=ROOT / 'mixamo_pipeline.py',
-                                    character=character, preset=preset):
+                                    character=character, preset=preset, output=Path(record['output'])):
             return respond_error('Saved resume command is invalid.', 409)
         jid = uuid.uuid4().hex[:12]
         job = dict(command=command, preset=preset, characterSha256=record['characterSha256'],
@@ -725,7 +804,7 @@ def resume_job():
                    character=character, output=Path(record['output']),
                    lines=deque(maxlen=2000), next_index=0, first_index=0,
                    process=None, returncode=None, error=None,
-                   cancel_requested=False, animations=record['animations'])
+                   cancel_requested=False, animations=record['animations'], modelLabel=record.get('modelLabel'))
         STATE['job'] = job
     persist_job(job)
     Thread(target=worker, args=(job, command), daemon=True).start()

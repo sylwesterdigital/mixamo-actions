@@ -143,3 +143,19 @@
 .preset-import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 .preset-import-row .mini-file{flex:0 0 auto;cursor:pointer}
 .preset-import-status{font-size:11px;color:#a6bddb;line-height:1.45;flex:1 1 150px;overflow-wrap:anywhere}
+/* v1.2.9: separate editable action collections and original-source model extensions. */
+#sourceLibrary{padding:8px 2px 0}#sourceLibrary p{line-height:1.5;margin:5px 0 8px}
+.sidebar .segmented{flex-wrap:wrap}.sidebar .segmented button{min-width:0;flex:1 1 auto}
+.preset-editor-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.preset-editor-dialog{width:min(720px,94vw);max-height:86vh;overflow:auto;border:1px solid #526a8d;border-radius:11px;padding:20px;background:#142136;color:#e4edff;box-shadow:0 22px 75px #000b}
+.preset-editor-dialog::backdrop{background:#020814bc;backdrop-filter:blur(4px)}
+.preset-editor-head,.preset-editor-footer{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.preset-editor-head h2{font-size:18px;margin:0}.preset-editor-dialog .field{display:block;margin:15px 0}
+.preset-editor-dialog input{width:100%;background:#0b1422;color:#edf4ff;border:1px solid #455a77;border-radius:5px;padding:8px;margin-top:4px}
+.preset-edit-table{max-height:26vh;overflow:auto;border:1px solid #384963;border-radius:6px;margin:12px 0}
+.preset-edit-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border-bottom:1px solid #303f56}
+.preset-edit-item:last-child{border-bottom:0}.preset-edit-item span{overflow-wrap:anywhere}
+.preset-edit-item button{background:#35445a;color:#fff;border:1px solid #506684;border-radius:4px;padding:2px 8px}
+.preset-add-box{border:1px solid #415471;border-radius:7px;padding:12px;margin:10px 0}
+.preset-add-box legend{padding:0 6px;color:#b5cff2}.preset-add-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.preset-add-fields label{font-size:11px;color:#adc3e1}.preset-editor-footer{justify-content:flex-end;margin-top:16px}

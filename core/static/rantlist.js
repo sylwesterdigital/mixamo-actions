@@ -124,6 +124,7 @@ async function loadRemote(item){
     announce('Loading Rantlist model…');
     const url=URL.createObjectURL(await blobFor(item.id,'glb'));
     await window.MixamoViewer.load(url,item.name,{objectURL:true});
+    window.MixamoStudioSceneSource?.remote();
     ui.selected=item.id;render();
     announce(`${item.name} loaded from your Rantlist gallery.`);
   }catch(error){announce('Rantlist model: '+error.message,true);}

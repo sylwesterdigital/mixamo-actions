@@ -28,6 +28,86 @@ class FlaskLocalTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
+    def test_edit_motion_collection_create_update_and_concurrent_reject(self):
+        name='new_collection_for_route_test'
+        file=self.mod.PRESETS/(name+'.json')
+        file.unlink(missing_ok=True)
+        motions=[{'search':'walk','title':'Walk','motionId':'117660901'}]
+        try:
+            denied=self.client.post('/api/presets/edit',json={'name':name,'animations':motions},
+                      headers={'Host':'127.0.0.1:5055'})
+            self.assertEqual(denied.status_code,403)
+            created=self.client.post('/api/presets/edit',json={'name':name,'animations':motions},headers=self.headers)
+            self.assertEqual(created.status_code,200,created.data)
+            self.assertEqual(created.json['count'],1)
+            read=self.client.get('/api/presets/'+name+'.json',headers=self.headers)
+            self.assertEqual(read.status_code,200)
+            self.assertEqual(read.json['content']['animations'],motions)
+            conflict=self.client.post('/api/presets/edit',json={'name':name,'animations':motions},headers=self.headers)
+            self.assertEqual(conflict.status_code,409)
+            updated=self.client.post('/api/presets/edit',json={
+                'name':name,'animations':motions+[{'search':'run','title':'Running'}],
+                'original':read.json['filename'],'sha256':read.json['sha256']},headers=self.headers)
+            self.assertEqual(updated.status_code,200,updated.data)
+            self.assertEqual(updated.json['count'],2)
+            self.assertEqual(self.client.post('/api/presets/edit',json={'name':name,'animations':[]},
+                             headers=self.headers).status_code,400)
+        finally:
+            file.unlink(missing_ok=True)
+
+    def test_extend_generated_gallery_model_reuses_existing_fbx(self):
+        from resume_state import ResumePlan, digest
+        base=self.mod.UPLOADS/'test-extend'
+        base.mkdir(parents=True,exist_ok=True)
+        original=base/'model.fbx'
+        original.write_bytes(b'Kaydara FBX Binary  \x00\x1a\x00'+bytes(1200))
+        out=base/'model-exports'
+        (out/'fbx').mkdir(parents=True,exist_ok=True)
+        (out/'glb').mkdir(exist_ok=True)
+        (out/'source_character').mkdir(exist_ok=True)
+        (out/'manifest.json').write_text(json.dumps({'original_character':str(original)}))
+        glb=out/'glb'/'model-exports-anims.glb'
+        glb.write_bytes(b'glTF'+bytes(100))
+        old=[{'search':'idle','title':'Idle','filename':'Idle__117780901','motionId':'117780901'}]
+        preset=base/'old.json'
+        preset.write_text(json.dumps({'animations':old}))
+        cp=ResumePlan(out/'fbx',old,source_sha256=digest(original),preset_sha256=digest(preset))
+        spec,filename=cp.expected[0]
+        (out/'fbx'/filename).write_bytes(original.read_bytes())
+        cp.record(spec,filename)
+        saved_preset=self.mod.PRESETS/'extension-route-test.json'
+        saved_preset.write_text(json.dumps({'animations':[
+            {'search':'idle','title':'Idle','filename':'Idle__117780901','motionId':'117780901'},
+            {'search':'walk','title':'Walk','filename':'Walk__118080901','motionId':'118080901'}]}))
+        uid='c'*24
+        with self.mod.LIBRARY_LOCK:
+            saved_catalog=self.mod._load_library()
+            self.mod._save_library(saved_catalog+[{'id':uid,'name':'Base model','path':str(glb),'source':'generated','created':'today'}])
+        with self.mod.STATE_LOCK:
+            saved_state=self.mod.STATE['job']
+            self.mod.STATE['job']=None
+        previous=self.mod.LAST_JOB_FILE.read_bytes() if self.mod.LAST_JOB_FILE.exists() else None
+        try:
+            with patch.object(self.mod,'Thread') as thread:
+                response=self.client.post('/api/jobs',data={
+                    'source_mode':'library','library_id':uid,'preset_mode':'saved',
+                    'preset':saved_preset.name,'blender':sys.executable,
+                },headers=self.headers)
+                self.assertEqual(response.status_code,200,response.data)
+                self.assertEqual(response.json['extension']['reused'],1)
+                self.assertEqual(response.json['extension']['remaining'],1)
+                self.assertEqual(response.json['extension']['total'],2)
+                self.assertIn('--out',self.mod.STATE['job']['command'])
+                thread.return_value.start.assert_called_once()
+                self.assertTrue(glb.exists())
+                self.assertEqual((out/'fbx'/filename).read_bytes(),original.read_bytes())
+        finally:
+            saved_preset.unlink(missing_ok=True)
+            with self.mod.LIBRARY_LOCK:self.mod._save_library(saved_catalog)
+            with self.mod.STATE_LOCK:self.mod.STATE['job']=saved_state
+            if previous is None:self.mod.LAST_JOB_FILE.unlink(missing_ok=True)
+            else:self.mod.LAST_JOB_FILE.write_bytes(previous)
+
     def test_diagnostics_require_token_and_log_safe_routes(self):
         denied=self.client.get('/api/diagnostics',headers={'Host':'127.0.0.1:5055'})
         self.assertEqual(denied.status_code,403)

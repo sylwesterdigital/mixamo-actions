@@ -1,3 +1,21 @@
+## v1.3.1 — 2026-10-28
+
+- Fix the macOS model-extension installer test: compare canonical physical paths because temporary workspaces under `/var` resolve to `/private/var`, without changing the actual extension output directory.
+- Add an OS-independent symlinked-workspace regression test for the same path-alias behavior, preserving the original generated GLB and saved FBXs.
+- Preserve v1.3.0 collection editing, Loaded model extension, resume checkpoints, Model Library and Rantlist integration; no change to Ubuntu deployment or server configuration.
+- Keep failed-update rollback behavior, clear watcher START/END logs, and independent GitHub/homepage publication states unchanged.
+
+## v1.3.0 — 2026-10-27
+
+- Add **New collection** and **Edit selected** to the Studio animation panel: create, extend, and save named motion presets with search, title, description and exact motion ID; preserve prior collections and reject unintended overwrites.
+- Keep the full Mixamo DevTools Collector with Save as new / Update / Export JSON for selecting motions from Mixamo cards; its export still imports directly into Studio.
+- Add **Loaded model** as a third character source: select a locally generated model, choose a preset of extra actions, and build an extended GLB without locating or re-uploading a Tripo source file manually.
+- Recover the original rig/ZIP from the generated model manifest and reuse existing verified animation FBXs; recognise both SHA-256 checkpoints and safely verified pre-checkpoint legacy exports.
+- Download only genuinely new motions, then combine old and new clips in a separate `~/MixamoLocal/extensions/` output; preserve the original GLB, source ZIP, and prior animation files.
+- Keep resumable extension downloads after a timeout, validate the saved pipeline `--out` against the persisted job destination, and never execute an unchecked resume command.
+- Explain when imported/remote standalone GLBs lack enough rig provenance to extend safely instead of presenting a misleading Build action.
+- Preserve the Rantlist bridge and allowlisted static-only Ubuntu deployment, with no server or Nginx changes; add local extension and legacy recovery regression tests.
+
 ## v1.2.8 — 2026-10-15
 
 - Fix animation preset imports: picking a JSON file immediately validates, saves and selects it in the preset library; the import control is visible in Library and JSON path modes.
