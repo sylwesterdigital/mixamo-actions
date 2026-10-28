@@ -1,3 +1,11 @@
+## v1.3.3 — 2026-10-28
+
+- Add **◈ Optimize textures** to each Local Model Library card with 75%, 50%, or 25% dimension options, progress feedback and actual output-size statistics.
+- Rebuild a new self-contained GLB by resizing its embedded PNG/JPEG/WebP textures and repacking binary bufferViews, preserving original geometry, armature, materials, animation accessors and source GLB.
+- Register separately downloadable local variants named `<original>-o75`, `<original>-o50`, or `<original>-o25`, copying the current thumbnail while keeping the original generated files untouched.
+- Reject invalid, unsupported or externally-textured GLBs safely; treat optimized variants as managed library files for explicit user deletion, not as extendable Mixamo rig sources.
+- Add Pillow to local Studio requirements; add GLB integrity, alpha-channel, all-scale, safe-input and Flask API regression tests. No changes to Rantlist backend or shared Ubuntu server configuration.
+
 ## v1.3.2 — 2026-10-28
 
 - Default Character source to **Use Local model**, automatically selecting the previously loaded, generated model from the Local Library without requiring its original ZIP path or uploading it again.

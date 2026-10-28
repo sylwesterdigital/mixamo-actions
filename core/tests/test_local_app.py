@@ -28,6 +28,56 @@ class FlaskLocalTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
+    def test_texture_optimization_creates_managed_variant_with_no_source_mutation(self):
+        from test_texture_optimize import build_glb_fixture, _unpack
+        uid='f'*24
+        source=self.mod.LIBRARY_FILES/(uid+'.glb')
+        build_glb_fixture(source)
+        before=source.read_bytes()
+        with self.mod.LIBRARY_LOCK:
+            old=self.mod._load_library()
+            self.mod._save_library(old+[{'id':uid,'name':'Avatar','path':str(source),
+                                        'source':'imported','created':'today','clips':3}])
+        variants=[]
+        try:
+            unauthorized=self.client.post(f'/api/library/{uid}/optimize',json={'percent':75},headers={'Host':'127.0.0.1:5055'})
+            self.assertEqual(unauthorized.status_code,403)
+            bad=self.client.post(f'/api/library/{uid}/optimize',json={'percent':77},headers=self.headers)
+            self.assertEqual(bad.status_code,400)
+            for percent in (75,50,25):
+                response=self.client.post(f'/api/library/{uid}/optimize',json={'percent':percent},headers=self.headers)
+                self.assertEqual(response.status_code,201,response.data)
+                model=response.json['model']
+                variants.append(model['id'])
+                self.assertEqual(model['name'],f'Avatar-o{percent}')
+                self.assertEqual(model['source'],'optimized')
+                self.assertEqual(model['originalId'],uid)
+                self.assertFalse(model['canExtend'])
+                self.assertEqual(model['clips'],3)
+                self.assertEqual(response.json['report']['optimizedCount'],3)
+                download=self.client.get(model['glbUrl'],headers=self.headers)
+                self.assertEqual(download.status_code,200)
+                self.assertTrue(download.data.startswith(b'glTF'))
+                self.assertNotEqual(download.data,before)
+            self.assertEqual(source.read_bytes(),before)
+            # Re-optimization of a variant always uses the base instead of
+            # compounding a 50% scale into another 50% conversion.
+            variant_response=self.client.post(f'/api/library/{variants[0]}/optimize',json={'percent':25},headers=self.headers)
+            self.assertEqual(variant_response.status_code,409,variant_response.data)
+            self.assertIn('already exists', variant_response.json['error'])
+            for variant in variants:
+                deleted=self.client.delete(f'/api/library/{variant}',headers=self.headers)
+                self.assertEqual(deleted.status_code,200)
+                self.assertFalse((self.mod.LIBRARY_FILES/(variant+'.glb')).exists())
+            self.assertEqual(source.read_bytes(),before)
+        finally:
+            with self.mod.LIBRARY_LOCK:
+                self.mod._save_library(old)
+            source.unlink(missing_ok=True)
+            for variant in variants:
+                (self.mod.LIBRARY_FILES/(variant+'.glb')).unlink(missing_ok=True)
+                (self.mod.LIBRARY_THUMBS/(variant+'.webp')).unlink(missing_ok=True)
+
     def test_edit_motion_collection_create_update_and_concurrent_reject(self):
         name='new_collection_for_route_test'
         file=self.mod.PRESETS/(name+'.json')

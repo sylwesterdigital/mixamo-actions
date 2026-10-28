@@ -12,7 +12,7 @@ BROWSER=environ.get('MIXAMO_LAYOUT_BROWSER') or which('chromium') or which('goog
 if not BROWSER: raise SystemExit('Set MIXAMO_LAYOUT_BROWSER to a headless Chromium binary to run this optional check.')
 with TemporaryDirectory() as tmp:
     pagefile=Path(tmp)/'gallery.html'
-    cards=''.join('<article class="model-card"><button class="model-card-main"><div class="model-thumb"><img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'30\' height=\'90\'%3E%3Crect width=\'30\' height=\'90\' fill=\'coral\'/%3E%3C/svg%3E"></div><div class="model-card-label"><strong>Test model</strong></div></button><div class="model-card-actions"><button>↓</button></div></article>' for _ in range(40))
+    cards=''.join('<article class="model-card"><button class="model-card-main"><div class="model-thumb"><img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'30\' height=\'90\'%3E%3Crect width=\'30\' height=\'90\' fill=\'coral\'/%3E%3C/svg%3E"></div><div class="model-card-label"><strong>Test model</strong></div></button><div class="model-card-actions"><button>◈</button><button>↑ R</button><button>↓</button><button>×</button></div></article>' for _ in range(40))
     pagefile.write_text(f'''<!doctype html><html><head><style>{CSS}</style><style>
     body{{margin:0;background:#111}}#stage{{width:1000px;height:900px;position:relative}}
     </style></head><body><div id="stage"><section class="library-dock" id="libraryDock" style="--library-height:650px">
@@ -26,6 +26,7 @@ with TemporaryDirectory() as tmp:
                 for height in (250,650):
                     page.evaluate('''({width,ratio,height})=>{
                       const dock=document.getElementById('libraryDock');
+                      dock.dataset.gallerySize=width===112?'s':width===164?'m':'xl';
                       dock.style.setProperty('--card-width',`${width}px`);
                       dock.style.setProperty('--card-ratio',ratio);
                       dock.style.setProperty('--library-height',`${height}px`);

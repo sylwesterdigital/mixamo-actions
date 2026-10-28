@@ -20,6 +20,7 @@ function setGalleryLayout(size=gallerySize,ratio=galleryRatio){
   if(!Object.hasOwn(gallerySizes,size)||!Object.hasOwn(galleryRatios,ratio))return;
   gallerySize=size;galleryRatio=ratio;
   const dock=$('libraryDock');
+  dock.dataset.gallerySize=size;
   dock.style.setProperty('--card-width',gallerySizes[size]+'px');
   dock.style.setProperty('--card-ratio',galleryRatios[ratio]);
   for(const b of document.querySelectorAll('[data-gallery-size]')){b.classList.toggle('selected',b.dataset.gallerySize===size);b.setAttribute('aria-pressed',String(b.dataset.gallerySize===size));}
@@ -174,7 +175,8 @@ function updateSourceLibraryName(){
   const m=libraryModels.find(item=>item.id===librarySelection);
   $('sourceLibraryName').textContent=m?
     (m.canExtend?`Selected: ${m.name} · ${m.clips??'?'} existing clips. Pick a motion collection and Build to add missing actions.`:
-      `Selected: ${m.name}. This GLB was imported without its original rig and cannot be extended. Choose a generated model.`):
+      (m.source==='optimized' ? `Selected: ${m.name}. This is a texture-optimized copy; choose the original generated model to extend its animations.` :
+      `Selected: ${m.name}. This GLB was imported without its original rig and cannot be extended. Choose a generated model.`)):
     'Select a previously generated model from your Local Model Library below. No ZIP upload is required.';
   $('sourceLibraryName').classList.toggle('source-unavailable',!!m&&!m.canExtend);
 }
@@ -432,6 +434,50 @@ libraryHandle.addEventListener('keydown',e=>{
 });
 try{setLibraryExpanded(JSON.parse(localStorage.getItem('mixamo-library-expanded')||'true'));}
 catch{setLibraryExpanded(true);}
+// Texture optimizer: a standalone local GLB variant, not another Blender run.
+let textureOptimizationSource=null, textureOptimizationBusy=false;
+const textureOptimizeDialog=$('textureOptimizeDialog');
+const texturePercent=()=>Number(document.querySelector('input[name="textureOptimizePercent"]:checked')?.value||75);
+function textureOptimizedLabel(model, percent){
+  return model.name.replace(/-o(?:75|50|25)$/i,'')+'-o'+percent;
+}
+function showTextureOptimizer(model){
+  textureOptimizationSource=model;
+  textureOptimizeDialog.querySelector('input[value="75"]').checked=true;
+  $('textureOptimizeSource').textContent='Original: '+model.name;
+  $('textureOptimizeStatus').className='texture-opt-status';
+  $('textureOptimizeStatus').textContent='No changes will be made to the original GLB.';
+  updateTextureName();
+  textureOptimizeDialog.showModal();
+}
+function updateTextureName(){
+  if(textureOptimizationSource)$('textureOptimizeName').textContent='New Local Library model: '+textureOptimizedLabel(textureOptimizationSource,texturePercent());
+}
+textureOptimizeDialog.querySelectorAll('input[name="textureOptimizePercent"]').forEach(r=>r.addEventListener('change',updateTextureName));
+$('textureOptimizeClose').onclick=$('textureOptimizeCancel').onclick=()=>{if(!textureOptimizationBusy)textureOptimizeDialog.close();};
+textureOptimizeDialog.addEventListener('cancel',event=>{if(textureOptimizationBusy)event.preventDefault();});
+$('textureOptimizeSubmit').onclick=async()=>{
+  if(textureOptimizationBusy||!textureOptimizationSource)return;
+  textureOptimizationBusy=true;
+  const button=$('textureOptimizeSubmit');button.disabled=true;
+  const status=$('textureOptimizeStatus');status.className='texture-opt-status busy';
+  status.textContent='Resizing textures and saving the new GLB…';
+  try{
+    const result=await send('/api/library/'+textureOptimizationSource.id+'/optimize',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({percent:texturePercent()})});
+    const r=result.report;
+    const reduction=Math.round((1-r.afterBytes/r.beforeBytes)*100);
+    const mb=n=>(n/1048576).toFixed(2)+' MiB';
+    status.className='texture-opt-status succeeded';
+    status.textContent=`Created ${result.model.name}. ${r.optimizedCount} texture(s) resized. GLB: ${mb(r.beforeBytes)} → ${mb(r.afterBytes)} (${reduction>=0?reduction+'% smaller':Math.abs(reduction)+'% larger'}).`;
+    await refreshLibrary();
+    const found=libraryModels.find(m=>m.id===result.model.id);
+    if(found)await loadLibraryModel(found);
+    showViewerNotice('Created '+result.model.name+' in Local Model Library');
+    button.textContent='Create another variant';
+  }catch(e){status.className='texture-opt-status failed';status.textContent='Optimization failed: '+e.message;}
+  finally{textureOptimizationBusy=false;button.disabled=false;}
+};
 function renderLibrary(){updateSourceLibraryName();
   const host=$('libraryCards');host.replaceChildren();
   $('libraryCount').textContent=String(libraryModels.length);
@@ -458,7 +504,8 @@ function renderLibrary(){updateSourceLibraryName();
     };
     const publish=document.createElement('button');publish.type='button';publish.title='Publish this GLB to your private Rantlist Stage gallery';publish.textContent='↑ R';publish.setAttribute('aria-label','Publish '+model.name+' to Rantlist');
     publish.onclick=()=>window.RantlistStudio?.publish(model.id,model.name);
-    tools.append(publish,download,remove);card.append(open,tools);host.append(card);
+    const optimize=document.createElement('button');optimize.type='button';optimize.title='Create texture-optimized GLB (75%, 50% or 25%)';optimize.textContent='◈';optimize.setAttribute('aria-label','Optimize textures of '+model.name);optimize.onclick=()=>showTextureOptimizer(model);
+    tools.append(optimize,publish,download,remove);card.append(open,tools);host.append(card);
   }
 }
 async function captureForLibrary(id){

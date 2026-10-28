@@ -169,3 +169,24 @@
 .source-detail .hint{line-height:1.5;margin:5px 0 8px;overflow-wrap:anywhere}
 .source-detail .source-unavailable{color:#f1a9af}
 #sourcePickModel{margin:4px 0 7px}
+
+/* v1.3.3: non-destructive texture-optimization dialog. */
+.texture-opt-dialog{width:min(460px,calc(100vw - 28px));max-height:calc(100dvh - 36px);overflow:auto;border:1px solid #56729b;border-radius:12px;background:#18263a;color:#e6f0ff;padding:22px;box-shadow:0 22px 70px #000c}
+.texture-opt-dialog::backdrop{background:#050c18bc;backdrop-filter:blur(4px)}
+.texture-opt-dialog h2{font-size:20px;margin:12px 0}
+.texture-opt-dialog .hint{line-height:1.55;color:#aec2df}
+.texture-opt-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.texture-opt-options{display:flex;justify-content:space-around;gap:15px;padding:17px 12px;margin:17px 0;border:1px solid #4e6689;border-radius:8px}
+.texture-opt-options legend{font-size:12px;color:#aac1e2;padding:0 5px}
+.texture-opt-options label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15px;font-weight:700}
+.texture-opt-status{padding:11px 12px;border:1px solid #3d5473;border-radius:6px;background:#121e2e;color:#adc3df;line-height:1.5;white-space:pre-wrap}
+.texture-opt-status.failed{border-color:#a45c68;color:#ffcad4;background:#392530}
+.texture-opt-status.succeeded{border-color:#467969;color:#b6f4d5;background:#16382f}
+.texture-opt-status.busy::before{content:'';display:inline-block;width:12px;height:12px;margin-right:8px;vertical-align:-2px;border:2px solid #6186c4;border-top-color:#fff;border-radius:50%;animation:rantlistSpin 750ms linear infinite}
+.texture-opt-footer{display:flex;gap:9px;justify-content:flex-end;margin-top:17px}
+.texture-opt-dialog button:disabled{opacity:.55;cursor:wait}
+
+/* Four tools must fit even on an S-size portrait or landscape card. */
+.library-dock[data-gallery-size="s"] .model-card-actions{gap:2px;right:4px;bottom:4px}
+.library-dock[data-gallery-size="s"] .model-card-actions button,
+.library-dock[data-gallery-size="s"] .model-card-actions a{min-width:22px;height:22px;padding:0 2px;font-size:10px}

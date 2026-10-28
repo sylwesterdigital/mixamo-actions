@@ -27,6 +27,7 @@ import uuid
 from flask import Flask, abort, jsonify, render_template, request, send_file, g
 from werkzeug.utils import secure_filename
 from rantlist_bridge import RantlistBridge, RantlistError, MAX_MODEL
+from texture_optimize import optimize_glb, OptimizationError, SCALES
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_FILE = ROOT.parent / "release.json"
@@ -309,6 +310,7 @@ def _library_public(entry):
                 glbUrl=f"/api/library/{entry['id']}/glb",
                 downloadUrl=f"/api/library/{entry['id']}/download",
                 jobId=entry.get('jobId'), canExtend=entry.get('source') == 'generated',
+                optimization=entry.get('optimization'), originalId=entry.get('originalId'),
                 thumbnailUrl=f"/api/library/{entry['id']}/thumbnail" if (LIBRARY_THUMBS / (entry['id'] + '.webp')).is_file() else None)
     return item
 
@@ -382,6 +384,61 @@ def import_library_model():
         return respond_error(exc)
 
 
+@app.post('/api/library/<item_id>/optimize')
+def optimize_library_model(item_id):
+    """Create a new managed GLB by shrinking embedded textures. No source mutation."""
+    entry = library_lookup(item_id)
+    data = request.get_json(silent=True) or {}
+    percent = data.get('percent') if isinstance(data, dict) else None
+    if type(percent) is not int or percent not in SCALES:
+        return respond_error('Choose a texture size of 75%, 50%, or 25%')
+    # Optimizing an optimized model should still mean a percentage of the
+    # original model, not a compounded downscale from another copy.
+    if entry.get('source') == 'optimized' and entry.get('originalId'):
+        try:
+            entry = library_lookup(entry['originalId'])
+        except Exception:
+            return respond_error('Original model is no longer in the library. Select another source model.', 409)
+    original_name = re.sub(r'-o(?:75|50|25)$', '', entry['name'], flags=re.I)
+    new_name = original_name + '-o' + str(percent)
+    with LIBRARY_LOCK:
+        duplicate = next((m for m in _load_library() if m.get('originalId') == entry['id']
+                          and m.get('optimization', {}).get('percent') == percent
+                          and Path(m.get('path', '')).is_file()), None)
+    if duplicate:
+        return respond_error(f'{new_name} already exists in the Local Library. Delete that variant first if you want to recreate it.', 409)
+    uid = uuid.uuid4().hex
+    destination = LIBRARY_FILES / (uid + '.glb')
+    thumbnail_destination = LIBRARY_THUMBS / (uid + '.webp')
+    try:
+        report = optimize_glb(Path(entry['path']), destination, percent)
+        item = dict(id=uid, name=new_name, source='optimized', path=str(destination.resolve()),
+                    created=now(), size=destination.stat().st_size, clips=entry.get('clips'),
+                    originalId=entry['id'], optimization=report)
+        with LIBRARY_LOCK:
+            existing = _load_library()
+            if any(m.get('originalId') == entry['id'] and m.get('optimization', {}).get('percent') == percent
+                   and Path(m.get('path', '')).is_file() for m in existing):
+                destination.unlink(missing_ok=True)
+                return respond_error(f'{new_name} was created by another request. Refresh the gallery.', 409)
+            # The image is the same avatar with lower-resolution textures;
+            # retain the original stage composition for the new card.
+            thumbnail = LIBRARY_THUMBS / (entry['id'] + '.webp')
+            if thumbnail.is_file():
+                shutil.copyfile(thumbnail, thumbnail_destination)
+            existing.append(item)
+            _save_library(existing)
+        return jsonify(ok=True, model=_library_public(item), report=report), 201
+    except (OptimizationError, ValueError) as exc:
+        destination.unlink(missing_ok=True)
+        thumbnail_destination.unlink(missing_ok=True)
+        return respond_error(str(exc), 422)
+    except OSError:
+        destination.unlink(missing_ok=True)
+        thumbnail_destination.unlink(missing_ok=True)
+        return respond_error('Could not save optimized GLB in the Local Library', 500)
+
+
 @app.get('/api/library/<item_id>/glb')
 def library_glb(item_id):
     entry = library_lookup(item_id)
@@ -445,7 +502,7 @@ def delete_library_item(item_id):
         (LIBRARY_THUMBS / (item_id + '.webp')).unlink(missing_ok=True)
         # Only remove GLBs explicitly copied into the application-managed library.
         managed = LIBRARY_FILES / (item_id + '.glb')
-        if entry.get('source') == 'imported' and Path(entry['path']).resolve() == managed.resolve():
+        if entry.get('source') in ('imported', 'optimized') and Path(entry['path']).resolve() == managed.resolve():
             managed.unlink(missing_ok=True)
     return jsonify(ok=True)
 
