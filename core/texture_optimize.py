@@ -7,6 +7,7 @@ No external tools, Blender, network connections, or input-file modifications.
 from __future__ import annotations
 
 from io import BytesIO
+from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 import struct
@@ -17,12 +18,38 @@ GLB_MAGIC = b'glTF'
 JSON_CHUNK = b'JSON'
 BIN_CHUNK = b'BIN\0'
 MAX_GLB = 256 * 1024 * 1024
-SCALES = {75, 50, 25}
+SCALES = (75, 50, 25, 12.5)
+MIN_SCALE = Decimal("1")
+MAX_SCALE = Decimal("99.99")
 MIME_FORMAT = {'image/png': 'PNG', 'image/jpeg': 'JPEG', 'image/webp': 'WEBP'}
 
 
 class OptimizationError(ValueError):
     pass
+
+
+def normalize_percent(value):
+    """Canonical numeric scale, 1..99.99%, with up to two decimal places.
+
+    Return int for whole percentages, float otherwise; refuse booleans,
+    NaN/Infinity, textual values and excessive decimal precision.
+    """
+    if type(value) not in (float, int):
+        raise OptimizationError('Enter a percentage from 1 to 99.99 (up to two decimals).')
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise OptimizationError('Enter a percentage from 1 to 99.99 (up to two decimals).')
+    if not number.is_finite() or not MIN_SCALE <= number <= MAX_SCALE or number != number.quantize(Decimal('0.01')):
+        raise OptimizationError('Enter a percentage from 1 to 99.99 (up to two decimals).')
+    number = number.normalize()
+    return int(number) if number == number.to_integral_value() else float(number)
+
+
+def percent_suffix(value):
+    """Filesystem-friendly canonical suffix e.g. 12.5 -> o12p5."""
+    number = normalize_percent(value)
+    return 'o' + format(Decimal(str(number)), 'f').replace('.', 'p')
 
 
 def _pad(data: bytes, fill: bytes = b'\0') -> bytes:
@@ -69,7 +96,7 @@ def _unpack(path: Path):
     return document, binary
 
 
-def _encode_image(data: bytes, mime: str, percent: int):
+def _encode_image(data: bytes, mime: str, percent: int | float):
     try:
         with Image.open(BytesIO(data)) as picture:
             if getattr(picture, 'n_frames', 1) != 1:
@@ -108,10 +135,9 @@ def _encode_image(data: bytes, mime: str, percent: int):
         raise OptimizationError(f'Texture could not be decoded or resized: {exc}') from exc
 
 
-def optimize_glb(source: Path, destination: Path, percent: int) -> dict:
+def optimize_glb(source: Path, destination: Path, percent: int | float) -> dict:
     """Write a new GLB, never overwrite `source`. Return optimization statistics."""
-    if type(percent) is not int or percent not in SCALES:
-        raise OptimizationError('Select a texture size of 75%, 50%, or 25%')
+    percent = normalize_percent(percent)
     source = Path(source).resolve()
     destination = Path(destination)
     if source == destination.resolve() or destination.exists():

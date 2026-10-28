@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.3</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.4</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -119,7 +119,12 @@
     <label><input type="radio" name="textureOptimizePercent" value="75" checked> 75%</label>
     <label><input type="radio" name="textureOptimizePercent" value="50"> 50%</label>
     <label><input type="radio" name="textureOptimizePercent" value="25"> 25%</label>
+    <label><input type="radio" name="textureOptimizePercent" value="12.5"> 12.5%</label>
+    <label class="texture-opt-custom"><input type="radio" name="textureOptimizePercent" value="custom" id="textureOptimizeCustomRadio"> Custom
+      <input id="textureOptimizeCustom" type="number" inputmode="decimal" min="1" max="99.99" step="0.01" placeholder="e.g. 37.5" aria-label="Custom texture percentage" aria-describedby="textureOptimizeCustomHint"> <span>%</span>
+    </label>
   </fieldset>
+  <p class="hint" id="textureOptimizeCustomHint">Custom: 1–99.99%, up to two decimal places. Example: 12.5% creates -o12p5.</p>
   <p class="hint" id="textureOptimizeName">New GLB name: model-o75</p>
   <div id="textureOptimizeStatus" class="texture-opt-status" role="status" aria-live="polite"></div>
   <div class="texture-opt-footer"><button id="textureOptimizeCancel" type="button" class="btn">Close</button><button id="textureOptimizeSubmit" type="button" class="btn primary">Create optimized GLB</button></div>

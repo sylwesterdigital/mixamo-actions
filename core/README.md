@@ -143,4 +143,4 @@ permissions are required for server-side path access.
 
 ## Non-destructive texture optimization
 
-The Local gallery's ◈ button calls `POST /api/library/<id>/optimize` with JSON `{"percent": 75|50|25}` (local token required). The service resizes embedded PNG/JPEG/WebP textures from the already-built GLB into a new managed GLB under `~/MixamoLocal/library/files/`, preserving skinning, mesh and animation buffer data. The original input and provenance are not rewritten; thumbnail and clip metadata are inherited.
+The Local gallery's ◈ button calls `POST /api/library/<id>/optimize` with JSON `{"percent": 75|50|25|12.5|custom_number}` (local token required). The service resizes embedded PNG/JPEG/WebP textures from the already-built GLB into a new managed GLB under `~/MixamoLocal/library/files/`, preserving skinning, mesh and animation buffer data. The original input and provenance are not rewritten; thumbnail and clip metadata are inherited.

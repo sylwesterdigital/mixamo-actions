@@ -437,27 +437,52 @@ catch{setLibraryExpanded(true);}
 // Texture optimizer: a standalone local GLB variant, not another Blender run.
 let textureOptimizationSource=null, textureOptimizationBusy=false;
 const textureOptimizeDialog=$('textureOptimizeDialog');
-const texturePercent=()=>Number(document.querySelector('input[name="textureOptimizePercent"]:checked')?.value||75);
+const textureCustomInput=$('textureOptimizeCustom');
+function texturePercent(){
+  const selected=document.querySelector('input[name="textureOptimizePercent"]:checked')?.value||'75';
+  if(selected!=='custom')return Number(selected);
+  if(!textureCustomInput.value.trim())return null;
+  return Number(textureCustomInput.value);
+}
+function validTexturePercent(percent){
+  return percent!==null&&Number.isFinite(percent)&&percent>=1&&percent<=99.99&&Math.abs(Math.round(percent*100)-percent*100)<1e-7;
+}
+function percentLabel(percent){return String(percent).replace('.', 'p');}
+function originalTextureModel(model){
+  return model.source==='optimized'&&model.originalId?libraryModels.find(m=>m.id===model.originalId)||model:model;
+}
 function textureOptimizedLabel(model, percent){
-  return model.name.replace(/-o(?:75|50|25)$/i,'')+'-o'+percent;
+  return originalTextureModel(model).name+'-o'+percentLabel(percent);
 }
 function showTextureOptimizer(model){
   textureOptimizationSource=model;
   textureOptimizeDialog.querySelector('input[value="75"]').checked=true;
-  $('textureOptimizeSource').textContent='Original: '+model.name;
+  textureCustomInput.value='';
+  $('textureOptimizeSource').textContent='Original: '+originalTextureModel(model).name;
   $('textureOptimizeStatus').className='texture-opt-status';
   $('textureOptimizeStatus').textContent='No changes will be made to the original GLB.';
+  $('textureOptimizeSubmit').textContent='Create optimized GLB';
   updateTextureName();
   textureOptimizeDialog.showModal();
 }
 function updateTextureName(){
-  if(textureOptimizationSource)$('textureOptimizeName').textContent='New Local Library model: '+textureOptimizedLabel(textureOptimizationSource,texturePercent());
+  const percent=texturePercent();
+  const valid=validTexturePercent(percent);
+  $('textureOptimizeSubmit').disabled=textureOptimizationBusy||!valid;
+  if(textureOptimizationSource)$('textureOptimizeName').textContent=valid
+    ?'New Local Library model: '+textureOptimizedLabel(textureOptimizationSource,percent)
+    :'Enter a custom percentage from 1 to 99.99 (up to two decimals).';
 }
 textureOptimizeDialog.querySelectorAll('input[name="textureOptimizePercent"]').forEach(r=>r.addEventListener('change',updateTextureName));
+textureCustomInput.addEventListener('input',()=>{
+  $('textureOptimizeCustomRadio').checked=true;
+  updateTextureName();
+});
+textureCustomInput.addEventListener('focus',()=>{$('textureOptimizeCustomRadio').checked=true;updateTextureName();});
 $('textureOptimizeClose').onclick=$('textureOptimizeCancel').onclick=()=>{if(!textureOptimizationBusy)textureOptimizeDialog.close();};
 textureOptimizeDialog.addEventListener('cancel',event=>{if(textureOptimizationBusy)event.preventDefault();});
 $('textureOptimizeSubmit').onclick=async()=>{
-  if(textureOptimizationBusy||!textureOptimizationSource)return;
+  if(textureOptimizationBusy||!textureOptimizationSource||!validTexturePercent(texturePercent()))return;
   textureOptimizationBusy=true;
   const button=$('textureOptimizeSubmit');button.disabled=true;
   const status=$('textureOptimizeStatus');status.className='texture-opt-status busy';
@@ -476,7 +501,7 @@ $('textureOptimizeSubmit').onclick=async()=>{
     showViewerNotice('Created '+result.model.name+' in Local Model Library');
     button.textContent='Create another variant';
   }catch(e){status.className='texture-opt-status failed';status.textContent='Optimization failed: '+e.message;}
-  finally{textureOptimizationBusy=false;button.disabled=false;}
+  finally{textureOptimizationBusy=false;updateTextureName();}
 };
 function renderLibrary(){updateSourceLibraryName();
   const host=$('libraryCards');host.replaceChildren();
@@ -504,7 +529,7 @@ function renderLibrary(){updateSourceLibraryName();
     };
     const publish=document.createElement('button');publish.type='button';publish.title='Publish this GLB to your private Rantlist Stage gallery';publish.textContent='↑ R';publish.setAttribute('aria-label','Publish '+model.name+' to Rantlist');
     publish.onclick=()=>window.RantlistStudio?.publish(model.id,model.name);
-    const optimize=document.createElement('button');optimize.type='button';optimize.title='Create texture-optimized GLB (75%, 50% or 25%)';optimize.textContent='◈';optimize.setAttribute('aria-label','Optimize textures of '+model.name);optimize.onclick=()=>showTextureOptimizer(model);
+    const optimize=document.createElement('button');optimize.type='button';optimize.title='Create texture-optimized GLB (75%, 50%, 25%, 12.5% or custom)' ;optimize.textContent='◈';optimize.setAttribute('aria-label','Optimize textures of '+model.name);optimize.onclick=()=>showTextureOptimizer(model);
     tools.append(optimize,publish,download,remove);card.append(open,tools);host.append(card);
   }
 }

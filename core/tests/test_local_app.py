@@ -42,14 +42,14 @@ class FlaskLocalTests(unittest.TestCase):
         try:
             unauthorized=self.client.post(f'/api/library/{uid}/optimize',json={'percent':75},headers={'Host':'127.0.0.1:5055'})
             self.assertEqual(unauthorized.status_code,403)
-            bad=self.client.post(f'/api/library/{uid}/optimize',json={'percent':77},headers=self.headers)
+            bad=self.client.post(f'/api/library/{uid}/optimize',json={'percent':12.345},headers=self.headers)
             self.assertEqual(bad.status_code,400)
-            for percent in (75,50,25):
+            for percent in (75,50,25,12.5,33.33):
                 response=self.client.post(f'/api/library/{uid}/optimize',json={'percent':percent},headers=self.headers)
                 self.assertEqual(response.status_code,201,response.data)
                 model=response.json['model']
                 variants.append(model['id'])
-                self.assertEqual(model['name'],f'Avatar-o{percent}')
+                self.assertEqual(model['name'],'Avatar-o'+str(percent).replace('.', 'p'))
                 self.assertEqual(model['source'],'optimized')
                 self.assertEqual(model['originalId'],uid)
                 self.assertFalse(model['canExtend'])
@@ -60,6 +60,14 @@ class FlaskLocalTests(unittest.TestCase):
                 self.assertTrue(download.data.startswith(b'glTF'))
                 self.assertNotEqual(download.data,before)
             self.assertEqual(source.read_bytes(),before)
+            # Canonical percent: integer JSON and decimal JSON identify the same variant.
+            duplicate=self.client.post(f'/api/library/{uid}/optimize',json={'percent':75.0},headers=self.headers)
+            self.assertEqual(duplicate.status_code,409,duplicate.data)
+            for invalid in (0,100,-1,12.345,'12.5',True):
+                rejected=self.client.post(f'/api/library/{uid}/optimize',json={'percent':invalid},headers=self.headers)
+                self.assertEqual(rejected.status_code,400,rejected.data)
+            custom_variant=self.client.post(f'/api/library/{variants[0]}/optimize',json={'percent':33.33},headers=self.headers)
+            self.assertEqual(custom_variant.status_code,409,custom_variant.data)
             # Re-optimization of a variant always uses the base instead of
             # compounding a 50% scale into another 50% conversion.
             variant_response=self.client.post(f'/api/library/{variants[0]}/optimize',json={'percent':25},headers=self.headers)

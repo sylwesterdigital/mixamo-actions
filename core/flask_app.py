@@ -27,7 +27,7 @@ import uuid
 from flask import Flask, abort, jsonify, render_template, request, send_file, g
 from werkzeug.utils import secure_filename
 from rantlist_bridge import RantlistBridge, RantlistError, MAX_MODEL
-from texture_optimize import optimize_glb, OptimizationError, SCALES
+from texture_optimize import optimize_glb, OptimizationError, normalize_percent, percent_suffix
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_FILE = ROOT.parent / "release.json"
@@ -390,8 +390,10 @@ def optimize_library_model(item_id):
     entry = library_lookup(item_id)
     data = request.get_json(silent=True) or {}
     percent = data.get('percent') if isinstance(data, dict) else None
-    if type(percent) is not int or percent not in SCALES:
-        return respond_error('Choose a texture size of 75%, 50%, or 25%')
+    try:
+        percent = normalize_percent(percent)
+    except OptimizationError as exc:
+        return respond_error(str(exc))
     # Optimizing an optimized model should still mean a percentage of the
     # original model, not a compounded downscale from another copy.
     if entry.get('source') == 'optimized' and entry.get('originalId'):
@@ -399,8 +401,8 @@ def optimize_library_model(item_id):
             entry = library_lookup(entry['originalId'])
         except Exception:
             return respond_error('Original model is no longer in the library. Select another source model.', 409)
-    original_name = re.sub(r'-o(?:75|50|25)$', '', entry['name'], flags=re.I)
-    new_name = original_name + '-o' + str(percent)
+    original_name = entry['name']
+    new_name = original_name + '-' + percent_suffix(percent)
     with LIBRARY_LOCK:
         duplicate = next((m for m in _load_library() if m.get('originalId') == entry['id']
                           and m.get('optimization', {}).get('percent') == percent

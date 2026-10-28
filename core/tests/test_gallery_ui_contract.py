@@ -24,6 +24,19 @@ class GalleryUIContractTests(unittest.TestCase):
         self.assertNotIn("if(sourceMode==='path')",js)
         self.assertIn('extend_generated_model(extension_item, preset, WORKSPACE)',backend)
 
+    def test_texture_custom_percentage_controls_and_safe_suffixes(self):
+        markup=(ROOT/'templates/index.html').read_text()
+        controller=(ROOT/'static/studio.js').read_text()
+        api=(ROOT/'flask_app.py').read_text()
+        for option in ('75', '50', '25', '12.5'):
+            self.assertIn('name="textureOptimizePercent" value="'+option+'"',markup)
+        self.assertIn('id="textureOptimizeCustom"',markup)
+        self.assertIn('min="1" max="99.99" step="0.01"',markup)
+        self.assertIn('validTexturePercent',controller)
+        self.assertIn("$('textureOptimizeCustomRadio').checked=true",controller)
+        self.assertIn('percent_suffix(percent)',api)
+        self.assertIn('normalize_percent(percent)',api)
+
     def test_publisher_uses_model_name_not_native_prompt(self):
         controller=(ROOT/'static/studio.js').read_text()
         frontend=(ROOT/'static/rantlist.js').read_text()

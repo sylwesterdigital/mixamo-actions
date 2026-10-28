@@ -1,10 +1,10 @@
 {
-  "version": "1.3.3",
+  "version": "1.3.4",
   "changes": [
-    "Add **◈ Optimize textures** to each Local Model Library card with 75%, 50%, or 25% dimension options, progress feedback and actual output-size statistics.",
-    "Rebuild a new self-contained GLB by resizing its embedded PNG/JPEG/WebP textures and repacking binary bufferViews, preserving original geometry, armature, materials, animation accessors and source GLB.",
-    "Register separately downloadable local variants named `<original>-o75`, `<original>-o50`, or `<original>-o25`, copying the current thumbnail while keeping the original generated files untouched.",
-    "Reject invalid, unsupported or externally-textured GLBs safely; treat optimized variants as managed library files for explicit user deletion, not as extendable Mixamo rig sources.",
-    "Add Pillow to local Studio requirements; add GLB integrity, alpha-channel, all-scale, safe-input and Flask API regression tests. No changes to Rantlist backend or shared Ubuntu server configuration."
+    "Add a **12.5%** texture-resize preset and a custom 1–99.99% field (up to two decimals) to the Local Model Library optimizer.",
+    "Name fractional optimized variants predictably with a safe suffix, e.g. `avatar-o12p5`, `avatar-o37p5`, or `avatar-o33p33`.",
+    "Validate custom values in both Studio and Flask, refusing out-of-range, non-numeric and excessively precise inputs before writing files.",
+    "Preserve original GLBs and all geometry/animation buffers, and continue treating variants as independent managed gallery entries.",
+    "Add fractional-resize and API regression tests without changing the Rantlist backend or shared Ubuntu deployment configuration."
   ]
 }

@@ -1,3 +1,11 @@
+## v1.3.4 — 2026-10-28
+
+- Add a **12.5%** texture-resize preset and a custom 1–99.99% field (up to two decimals) to the Local Model Library optimizer.
+- Name fractional optimized variants predictably with a safe suffix, e.g. `avatar-o12p5`, `avatar-o37p5`, or `avatar-o33p33`.
+- Validate custom values in both Studio and Flask, refusing out-of-range, non-numeric and excessively precise inputs before writing files.
+- Preserve original GLBs and all geometry/animation buffers, and continue treating variants as independent managed gallery entries.
+- Add fractional-resize and API regression tests without changing the Rantlist backend or shared Ubuntu deployment configuration.
+
 ## v1.3.3 — 2026-10-28
 
 - Add **◈ Optimize textures** to each Local Model Library card with 75%, 50%, or 25% dimension options, progress feedback and actual output-size statistics.

@@ -13,9 +13,9 @@ with exact motion IDs and exports `animations.json`. Import this JSON using Stud
 resulting list. **The pipeline does not automatically inject the collector** into its
 Playwright-controlled tab; collect motions manually outside a running download job.
 
-## Optimize a completed GLB (v1.3.3)
+## Optimize a completed GLB (v1.3.4)
 
-Open Mixamo Studio at `http://127.0.0.1:5055`. In **Model Library → Local**, click the **◈** icon on a model card and choose **75%, 50%, or 25%**. Studio scales embedded PNG/JPEG/WebP texture dimensions and creates an additional GLB named `<original>-o75`, `<original>-o50`, or `<original>-o25`. The original GLB, rig, animations, and any original Tripo ZIP remain untouched. The new GLB is registered in `~/MixamoLocal/library/files/`, with an inherited stage thumbnail and a report of actual byte sizes and texture dimensions. Optimized models are ordinary library items that can be loaded, downloaded, deleted, or published to Rantlist within existing quota limits.
+Open Mixamo Studio at `http://127.0.0.1:5055`. In **Model Library → Local**, click the **◈** icon on a model card and choose **75%, 50%, 25%, 12.5%, or a custom 1–99.99%**. Studio scales embedded PNG/JPEG/WebP texture dimensions and creates an additional GLB named `<original>-o75`, `<original>-o50`, `<original>-o25`, or `<original>-o12p5` (or a custom suffix). The original GLB, rig, animations, and any original Tripo ZIP remain untouched. The new GLB is registered in `~/MixamoLocal/library/files/`, with an inherited stage thumbnail and a report of actual byte sizes and texture dimensions. Optimized models are ordinary library items that can be loaded, downloaded, deleted, or published to Rantlist within existing quota limits.
 
 Optimization operates on textures **embedded in the completed GLB**; it does not need the source ZIP again. Standalone GLBs that reference external images, unsupported KTX2 images, or meshopt-compressed binary payloads are rejected with an explanation instead of modifying original files. An optimized copy alone does not supply source-rig provenance for further Mixamo animation extension; use the original generated model for that purpose. Texture resizing can visibly reduce detail and does not guarantee a smaller file for every source. Requires Pillow, installed in the existing Flask `.venv` from `core/requirements.txt`.
 
@@ -84,7 +84,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 /Users/smielniczuk/Documents/works/mixamo-actions/
 ├── mixamo-studio-watch.sh         # start this watcher from the repo root
 ├── updates/
-│   ├── mixamo-actions-v1.3.3.zip # all new release ZIPs go HERE
+│   ├── mixamo-actions-v1.3.4.zip # all new release ZIPs go HERE
 │   ├── .backups/                 # automatic rollback snapshots
 │   └── .state/                   # PID, service log, installed version
 ├── core/                         # running Flask + Playwright + Blender application
@@ -92,7 +92,7 @@ The watcher **always runs from this repository**, not from `~/Downloads`. The pa
 └── updates-log.md
 ```
 
-Save the downloaded `mixamo-actions-v1.3.3.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
+Save the downloaded `mixamo-actions-v1.3.4.zip` **directly into the repository's `updates/` folder**, using your browser's Save As destination. No `cp ~/Downloads/...` step is needed.
 
 If your watcher is already running, simply save the new versioned ZIP in `updates/`; no command is needed. If the watcher is not running, start **continuous monitoring** once:
 
@@ -175,7 +175,7 @@ The existing server site mapping is left untouched. Deployment copies only five 
 ## Health and test commands
 
 ```zsh
-python3 ops/install_release.py updates/mixamo-actions-v1.3.3.zip --repo . --verify-only
+python3 ops/install_release.py updates/mixamo-actions-v1.3.4.zip --repo . --verify-only
 curl -fsS http://127.0.0.1:5055/api/release
 cd core && .venv/bin/python -m unittest discover -s tests -v
 ```
@@ -213,7 +213,7 @@ original bytes under `updates/.backups/before-v<version>-<timestamp>/`. See the 
 Git-staged changes to release files still require a manual commit/unstage first.
 
 For first upgrade from v1.1.0, stop the old watcher, save this package to `updates/`,
-bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.3.3.zip ops/install_release.py`,
+bootstrap the updated installer using `unzip -o updates/mixamo-actions-v1.3.4.zip ops/install_release.py`,
 and restart the watcher from the repository root.
 
 ### Rantlist Stage integration (v1.2.0)

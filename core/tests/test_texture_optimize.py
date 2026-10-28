@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from texture_optimize import _unpack, optimize_glb, OptimizationError
+from texture_optimize import _unpack, optimize_glb, OptimizationError, normalize_percent, percent_suffix
 
 
 def build_glb_fixture(path: Path, *, with_images=True):
@@ -71,12 +71,15 @@ class TextureOptimizationTests(unittest.TestCase):
             build_glb_fixture(source)
             input_bytes = source.read_bytes()
             before, source_bin = _unpack(source)
-            for percent in (75, 50, 25):
-                output = base/f'model-o{percent}.glb'
+            for percent in (75, 50, 25, 12.5, 37.5, 33.33, 1, 99.99):
+                output = base/f'model-{percent_suffix(percent)}.glb'
                 report = optimize_glb(source, output, percent)
                 after, new_bin = _unpack(output)
                 self.assertEqual(report['optimizedCount'], 3)
-                self.assertLess(output.stat().st_size, source.stat().st_size)
+                if percent <= 75:
+                    self.assertLess(output.stat().st_size, source.stat().st_size)
+                else:
+                    self.assertLessEqual(output.stat().st_size, source.stat().st_size)
                 for property in ('meshes', 'animations', 'materials', 'skins', 'nodes', 'accessors'):
                     self.assertEqual(after[property], before[property])
                 for idx in (0, 1):
@@ -87,6 +90,19 @@ class TextureOptimizationTests(unittest.TestCase):
                     with Image.open(BytesIO(payload)) as loaded:
                         self.assertEqual(loaded.size, (round(192*percent/100), round(256*percent/100)))
                 self.assertEqual(source.read_bytes(), input_bytes)
+
+    def test_canonical_custom_percentages_and_safe_names(self):
+        for value, canonical, suffix in (
+            (12.5, 12.5, 'o12p5'), (37.5, 37.5, 'o37p5'),
+            (33.33, 33.33, 'o33p33'), (75, 75, 'o75'),
+            (75.0, 75, 'o75'), (12.50, 12.5, 'o12p5'),
+            (1, 1, 'o1'), (99.99, 99.99, 'o99p99'),
+        ):
+            self.assertEqual(normalize_percent(value), canonical)
+            self.assertEqual(percent_suffix(value), suffix)
+        for bad in ('12.5', None, True, 0, 100, 12.345, -5, float('nan'), float('inf')):
+            with self.assertRaises(OptimizationError):
+                percent_suffix(bad)
 
     def test_png_alpha_survives(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -102,7 +118,7 @@ class TextureOptimizationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             src, out = Path(tmp)/'a.glb', Path(tmp)/'b.glb'
             build_glb_fixture(src, with_images=False)
-            for value in (None, '50', 15, 100, True):
+            for value in (None, '50', 0, 100, True, False, -2, 100.5, 0.99, 12.345, 33.333, float('nan'), float('inf')):
                 with self.assertRaises(OptimizationError):
                     optimize_glb(src, out, value)
             with self.assertRaisesRegex(OptimizationError, 'no embedded'):
