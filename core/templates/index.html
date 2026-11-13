@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Mixamo Studio — Motion Workbench</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='studio.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='studio.css', v=version) }}">
 <script type="importmap">
 {
  "imports": {
@@ -17,7 +17,7 @@
 <body>
 <div id="app">
 <header class="topbar">
-  <div class="brand"><span id="studioVersion" class="studio-version">v1.3.6</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
+  <div class="brand"><span id="studioVersion" class="studio-version">v{{ version }}</span><div class="brand-mark">M<span>·</span></div><div><strong>MIXAMO <span>STUDIO</span></strong><small>ANIMATION WORKBENCH</small></div></div>
   <div class="top-center"><span class="mode-dot"></span><span id="globalPhase">Ready to build</span><span id="topJobState" class="top-state">IDLE</span></div>
   <div class="top-actions"><button id="storageSettings" class="btn subtle" type="button" title="Current model workspace and validate an externally copied folder">Storage</button><span id="braveStatus" class="session-pill">Checking Brave…</span><button id="braveLogin" class="btn subtle" title="Launch regular Brave for manual Google/Adobe sign-in">Sign in</button><button id="braveAutomate" class="btn subtle">Connect Brave</button><button id="toggleSidebar" class="btn icon-btn" title="Toggle pipeline panel">☰</button></div>
 </header>
@@ -155,8 +155,8 @@
   <div class="preset-editor-footer"><button type="button" id="presetEditorCancel" class="btn">Cancel</button><button type="button" id="presetEditorSave" class="btn primary">Save collection</button></div>
 </dialog>
 <script id="bootstrap" type="application/json">{{ {'token':token,'presets':presets,'session':session,'workspace':workspace}|tojson }}</script>
-<script defer src="{{ url_for('static', filename='studio.js') }}"></script>
-<script defer src="{{ url_for('static', filename='rantlist.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='viewer.mjs') }}"></script>
-<script src="{{ url_for('static', filename='release-watch.js') }}" defer></script>
+<script defer src="{{ url_for('static', filename='studio.js', v=version) }}"></script>
+<script defer src="{{ url_for('static', filename='rantlist.js', v=version) }}"></script>
+<script type="module" src="{{ url_for('static', filename='viewer.mjs', v=version) }}"></script>
+<script src="{{ url_for('static', filename='release-watch.js', v=version) }}" defer></script>
 </body></html>

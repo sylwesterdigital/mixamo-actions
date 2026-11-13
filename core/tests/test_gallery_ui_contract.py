@@ -3,6 +3,30 @@ import unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class GalleryUIContractTests(unittest.TestCase):
+    def test_studio_controller_and_html_are_compatible_after_update(self):
+        """All controls the early guard checks must exist in this release's HTML.
+
+        Old cached pages will lack these controls and should trigger a recovery
+        instead of an exception that breaks the whole Studio controller.
+        """
+        import re
+        markup=(ROOT/'templates/index.html').read_text()
+        js=(ROOT/'static/studio.js').read_text()
+        backend=(ROOT/'flask_app.py').read_text()
+        version=(ROOT.parent/'VERSION').read_text().strip()
+        self.assertIn("const CLIENT_VERSION='"+version+"'",js)
+        self.assertIn('const missingIds=requiredIds.filter',js)
+        self.assertIn('if(missingIds.length)',js)
+        self.assertIn('window.location.replace(next.toString())',js)
+        self.assertIn("'no-store, max-age=0'",backend)
+        self.assertIn('v{{ version }}',markup)
+        for name in ('studio.js','studio.css','rantlist.js','viewer.mjs','release-watch.js'):
+            self.assertIn("filename='"+name+"', v=version",markup)
+        block=re.search(r'const requiredIds=\[(.*?)\];',js,re.S)
+        self.assertIsNotNone(block)
+        for element in re.findall(r"'([A-Za-z0-9]+)'",block.group(1)):
+            self.assertIn('id="'+element+'"',markup,element+' missing from actual HTML')
+
     def test_existing_generated_model_is_default_and_upload_has_only_one_button(self):
         markup=(ROOT/'templates/index.html').read_text()
         js=(ROOT/'static/studio.js').read_text()

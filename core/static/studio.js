@@ -1,6 +1,38 @@
 /* Mixamo Studio controller: isolated from Three.js so pipeline remains functional offline. */
 (() => {
 'use strict';
+// A previously cached HTML shell can load a newer controller during a release.
+// Refuse to initialize mismatched controls; perform at most one cache-busting
+// refresh, then leave a visible recovery button rather than crashing at .onclick.
+const CLIENT_VERSION='1.3.7';
+const requiredIds=['bootstrap','storageSettings','workspaceDialog','workspaceClose',
+  'workspaceBrowse','workspaceCopyCommand','workspaceStatus','workspaceCurrent',
+  'workspaceSpace','workspaceNew','sourceLibraryButton','sourceUploadButton',
+  'characterFile','presetSelect','libraryDock','start'];
+const missingIds=requiredIds.filter(id=>!document.getElementById(id));
+if(missingIds.length){
+  console.error('Mixamo Studio HTML/JS version mismatch; missing controls:',missingIds);
+  const warning=document.createElement('div');
+  warning.setAttribute('role','alert');
+  warning.style.cssText='position:fixed;inset:12px auto auto 12px;z-index:2147483647;max-width:520px;background:#35202a;color:white;padding:16px;border:1px solid #f48e9b;border-radius:8px;font:14px system-ui';
+  const message=document.createElement('p');
+  message.textContent='Studio interface did not match its JavaScript (v'+CLIENT_VERSION+'). Reload Studio to restore its controls. No model files are affected.';
+  const retry=document.createElement('button');retry.type='button';retry.textContent='Reload Studio';
+  const key='mixamo-studio-dom-refresh-'+CLIENT_VERSION;
+  retry.onclick=()=>{try{sessionStorage.removeItem(key);}catch(_){}window.location.reload();};
+  warning.append(message,retry);document.body.prepend(warning);
+  try{
+    if(!sessionStorage.getItem(key)){
+      sessionStorage.setItem(key,'attempted');
+      const next=new URL(window.location.href);
+      next.searchParams.set('studio_refresh',CLIENT_VERSION);
+      next.searchParams.set('studio_cache',String(Date.now()));
+      window.location.replace(next.toString());
+    }
+  }catch(err){console.warn('Automatic Studio reload not available',err);}
+  return;
+}
+try{sessionStorage.removeItem('mixamo-studio-dom-refresh-'+CLIENT_VERSION);}catch(_){}
 const init = JSON.parse(document.getElementById('bootstrap').textContent);
 const TOKEN = init.token;
 const $ = id => document.getElementById(id);

@@ -181,6 +181,16 @@ class FlaskLocalTests(unittest.TestCase):
         self.assertTrue(any(row['route']=='/api/diagnostics' for row in ok.json['events']))
         self.assertFalse(any('Authorization' in str(e) or 'token' in str(e).lower() for e in ok.json['events']))
 
+    def test_studio_html_is_uncached_and_static_assets_match_release(self):
+        response = self.client.get('/', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('no-store', response.headers.get('Cache-Control', ''))
+        self.assertIn('v1.3.7', response.get_data(as_text=True))
+        markup = response.get_data(as_text=True)
+        for name in ('studio.js', 'studio.css', 'rantlist.js', 'viewer.mjs', 'release-watch.js'):
+            self.assertIn(name + '?v=1.3.7', markup)
+        self.assertIn('id="storageSettings"', markup)
+
     def test_home(self):
         response = self.client.get('/', headers={'Host': '127.0.0.1:5055'})
         self.assertEqual(response.status_code, 200)

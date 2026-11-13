@@ -32,6 +32,7 @@ from workspace_storage import open_workspace, configured_workspace, verify_works
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_FILE = ROOT.parent / "release.json"
+STUDIO_VERSION = (ROOT.parent / "VERSION").read_text(encoding="utf-8").strip()
 # Persistently selected workspace is stored outside the versioned repository.
 # A missing external drive fails closed rather than recreating ~/MixamoLocal.
 WORKSPACE, WORKSPACE_ORIGIN = open_workspace()
@@ -108,6 +109,10 @@ API_EVENTS_LOCK = Lock()
 
 @app.after_request
 def audit_api_result(response):
+    # The HTML contains a one-session API token and must never remain cached
+    # across an updater restart (which changes DOM controls and studio.js).
+    if request.path == '/':
+        response.headers['Cache-Control'] = 'no-store, max-age=0'
     # Log only method, route template and status. Never body, profile JSON,
     # credentials, opaque IDs, private URLs, or query parameters.
     if request.path.startswith('/api/') and request.endpoint:
@@ -584,7 +589,7 @@ def worker(job, command):
 
 @app.get('/')
 def index():
-    return render_template('index.html', token=APP_TOKEN, session=session_status(), presets=saved_presets(), blender=blender_executable(), workspace=str(WORKSPACE))
+    return render_template('index.html', token=APP_TOKEN, session=session_status(), presets=saved_presets(), blender=blender_executable(), workspace=str(WORKSPACE), version=STUDIO_VERSION)
 
 
 @app.get('/api/workspace')

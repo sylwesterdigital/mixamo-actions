@@ -1,3 +1,11 @@
+## v1.3.7 — 2026-11-13
+
+- Fix Studio failing to start with `Cannot set properties of null (setting onclick)` when a cached HTML page loads the newly installed Storage controller.
+- Version all Studio CSS, JavaScript, WebGL viewer and release-watch asset URLs so the browser retrieves the matching files after each install.
+- Send `Cache-Control: no-store` on the local Studio HTML to prevent old UI controls and session tokens from surviving a Flask restart.
+- Add an early DOM compatibility guard: attempt one cache-busting reload, then show a clear manual Reload Studio control without aborting into a JavaScript exception.
+- Preserve external-drive manual adoption, model library files, generated FBXs/GLBs, texture optimization, Rantlist bridge and watcher safeguards unchanged.
+
 ## v1.3.6 — 2026-11-13
 
 - Fix v1.3.5 installer rollback: Flask route tests leaked `MIXAMO_FLASK_WORKSPACE` into later workspace migration tests, incorrectly blocking six activation checks.
