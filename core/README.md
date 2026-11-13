@@ -144,3 +144,7 @@ permissions are required for server-side path access.
 ## Non-destructive texture optimization
 
 The Local gallery's ◈ button calls `POST /api/library/<id>/optimize` with JSON `{"percent": 75|50|25|12.5|custom_number}` (local token required). The service resizes embedded PNG/JPEG/WebP textures from the already-built GLB into a new managed GLB under `~/MixamoLocal/library/files/`, preserving skinning, mesh and animation buffer data. The original input and provenance are not rewritten; thumbnail and clip metadata are inherited.
+
+## External storage (v1.3.5)
+
+Use the Studio **Storage** button, or run `python3 workspace_storage.py adopt --destination '/Volumes/ExternalSSD/MixamoLocal'` from `core/` after manually copying the complete workspace. Add `--activate` after checking its report. The tool validates existing folders, updates copied metadata and rebuilds a missing gallery index; it never copies or deletes media files. Stop Studio and the watcher during manual copying and activation. Retain the original `~/MixamoLocal` until you confirm that GLBs, gallery thumbnails and resumes work on the external drive. The configured external volume must remain mounted for the service to run.

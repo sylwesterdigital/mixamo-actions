@@ -8,6 +8,41 @@ let sourceMode = 'library', presetMode = 'saved', cursor = 0, jobID = null;
 let logArr = [], lastAutoPreview = null, activeJob = null, updatePending = false;
 let libraryModels=[], librarySelection=null, openedLocalFile=null, libraryExpanded=true;
 const getViewer = () => window.MixamoViewer;
+// User copies data themselves. The CLI only checks the copy, reconnects paths
+// and rebuilds missing gallery records with Studio and watcher stopped.
+const storageDialog=$('workspaceDialog');
+$('storageSettings').onclick=async()=>{
+  storageDialog.showModal();
+  $('workspaceStatus').textContent='Loading storage settings…';
+  try{
+    const data=await send('/api/workspace');
+    $('workspaceCurrent').value=data.path;
+    $('workspaceSpace').textContent=`${data.external?'External drive':'Mac internal drive'} · ${data.freeBytes==null?'Free space unavailable':(data.freeBytes/1073741824).toFixed(1)+' GiB free'}`;
+    $('workspaceStatus').textContent='Copy ~/MixamoLocal manually to the external drive, then choose that copied folder and activate it.';
+  }catch(e){$('workspaceStatus').textContent=e.message;}
+};
+$('workspaceClose').onclick=()=>storageDialog.close();
+$('workspaceBrowse').onclick=async()=>{
+  $('workspaceStatus').textContent='Select the already-copied MixamoLocal folder on your mounted drive…';
+  try{
+    const result=await send('/api/workspace/choose-folder',{method:'POST'});
+    $('workspaceNew').value=result.path;
+    $('workspaceStatus').textContent='Folder selected. Copy the validation/activation command. Studio will not copy any files.';
+  }catch(e){$('workspaceStatus').textContent=e.message;}
+};
+function shellQuote(value){return "'"+String(value).replaceAll("'", "'\\''")+"'";}
+$('workspaceCopyCommand').onclick=async()=>{
+  const dest=$('workspaceNew').value.trim();
+  if(!dest.startsWith('/Volumes/')||dest.split('/').filter(Boolean).length<3){
+    $('workspaceStatus').textContent='Select a folder inside a mounted /Volumes/<drive>/ directory.';return;
+  }
+  try{
+    const data=await send('/api/workspace');
+    const cmd=`cd ${shellQuote(data.repository)} && python3 core/workspace_storage.py adopt --destination ${shellQuote(dest)} --activate`;
+    await navigator.clipboard.writeText(cmd);
+    $('workspaceStatus').textContent='Command copied. After copying the whole MixamoLocal folder, stop Studio and watcher, run the command, then restart them.';
+  }catch(e){$('workspaceStatus').textContent='Could not copy: '+e.message;}
+};
 const gallerySizes={s:112,m:164,xl:228};
 const galleryRatios={square:'1 / 1',portrait:'2 / 3',landscape:'3 / 2'};
 let gallerySize='m',galleryRatio='portrait';

@@ -1,3 +1,22 @@
+## v1.3.6 — 2026-11-13
+
+- Fix v1.3.5 installer rollback: Flask route tests leaked `MIXAMO_FLASK_WORKSPACE` into later workspace migration tests, incorrectly blocking six activation checks.
+- Restore the previous environment after Flask route tests, including when a class fixture fails, so unrelated suites are not affected by the temporary test workspace.
+- Isolate manual-workspace test fixtures from external or inherited `MIXAMO_FLASK_WORKSPACE` values while retaining a regression test that intentionally set overrides must still block activation.
+- Preserve the v1.3.5 manual-copy external-drive workflow, gallery rebuild, source data, resume manifests, and mounted-drive safety controls unchanged.
+- Update the complete versioned release and public homepage metadata without modifying Rantlist, server configuration, or any other hosted application.
+
+## v1.3.5 — 2026-11-13
+
+- Add **Storage** in Mixamo Studio to select a manually copied workspace on a mounted external Mac volume instead of hard-coding `~/MixamoLocal`.
+- Keep all data copying under the user's control: the adoption tool **does not copy, move, delete or resize GLBs, FBXs, archives or textures**.
+- Inspect the existing external folder for `uploads`, `extensions`, `presets`, `library` and valid GLBs, and refuse to switch if important original data files are missing or have changed sizes.
+- Reconnect gallery/catalogue GLB paths, existing thumbnails, saved job commands, and Mixamo manifests to the manually copied location; rebuild a missing or corrupt gallery index by scanning available GLBs.
+- Preserve existing gallery IDs, names and animation metadata where available, and keep a pre-adoption backup of changed catalogue and checkpoint metadata on the destination.
+- Save the selected storage location in the user's private macOS Application Support configuration, never in the Git repository or release ZIP.
+- Refuse to write when a configured external drive is unmounted or has a mismatched workspace identity instead of silently filling internal storage.
+- Leave the original Mac folder untouched; no Rantlist backend, Ubuntu, Nginx or shared-server modifications.
+
 ## v1.3.4 — 2026-10-28
 
 - Add a **12.5%** texture-resize preset and a custom 1–99.99% field (up to two decimals) to the Local Model Library optimizer.

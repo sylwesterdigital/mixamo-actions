@@ -28,10 +28,14 @@ from flask import Flask, abort, jsonify, render_template, request, send_file, g
 from werkzeug.utils import secure_filename
 from rantlist_bridge import RantlistBridge, RantlistError, MAX_MODEL
 from texture_optimize import optimize_glb, OptimizationError, normalize_percent, percent_suffix
+from workspace_storage import open_workspace, configured_workspace, verify_workspace, WorkspaceError, _external_volume
 
 ROOT = Path(__file__).resolve().parent
 RELEASE_FILE = ROOT.parent / "release.json"
-WORKSPACE = Path(os.environ.get('MIXAMO_FLASK_WORKSPACE', str(Path.home() / 'MixamoLocal'))).expanduser().resolve()
+# Persistently selected workspace is stored outside the versioned repository.
+# A missing external drive fails closed rather than recreating ~/MixamoLocal.
+WORKSPACE, WORKSPACE_ORIGIN = open_workspace()
+_WORKSPACE_PATH, WORKSPACE_ID, _ = configured_workspace()
 UPLOADS = WORKSPACE / 'uploads'
 PRESETS = WORKSPACE / 'presets'
 LOGS = WORKSPACE / 'logs'
@@ -135,9 +139,16 @@ def local_access_only():
     host = request.host.split(':')[0].lower()
     if host not in {'127.0.0.1', 'localhost', '[::1]'}:
         abort(403)
-    if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith(('/api/rantlist/', '/api/diagnostics')):
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') or request.path.startswith(('/api/rantlist/', '/api/diagnostics', '/api/workspace')):
         if request.headers.get('X-Local-Token') != APP_TOKEN:
             abort(403)
+    # If the external disk is disconnected while Flask is running, refuse
+    # requests BEFORE any gallery/catalog or uploaded file write can occur.
+    if WORKSPACE_ID or _external_volume(WORKSPACE):
+        try:
+            verify_workspace(WORKSPACE, WORKSPACE_ID)
+        except WorkspaceError as exc:
+            return respond_error(str(exc), 503)
 
 
 def preset_local_path(value: str) -> Path:
@@ -330,7 +341,13 @@ def register_generated(job):
     key = hashlib.sha256(('generated:' + canonical).encode()).hexdigest()[:24]
     with LIBRARY_LOCK:
         entries = _load_library()
-        previous = next((e for e in entries if e['id'] == key), None)
+        # Preserve gallery IDs/thumbnails after an external-workspace migration.
+        # IDs created before migration include the original absolute path.
+        previous = next((e for e in entries if e.get('path') == canonical), None)
+        if previous and previous.get('source') == 'generated':
+            key = previous['id']
+        else:
+            previous = next((e for e in entries if e['id'] == key), None)
         size = file.stat().st_size
         modified = file.stat().st_mtime_ns
         if previous and (previous.get('size') != size or previous.get('mtime') != modified):
@@ -568,6 +585,49 @@ def worker(job, command):
 @app.get('/')
 def index():
     return render_template('index.html', token=APP_TOKEN, session=session_status(), presets=saved_presets(), blender=blender_executable(), workspace=str(WORKSPACE))
+
+
+@app.get('/api/workspace')
+def workspace_status():
+    # Only browser-local authenticated code may inspect the user's drive paths.
+    volume = _external_volume(WORKSPACE)
+    try:
+        free = shutil.disk_usage(WORKSPACE).free
+    except OSError:
+        free = None
+    return jsonify(path=str(WORKSPACE), origin=WORKSPACE_ORIGIN,
+                   external=bool(volume), volume=str(volume) if volume else None,
+                   freeBytes=free, repository=str(ROOT.parent),
+                   migrationCommand='python3 core/workspace_storage.py adopt --destination /Volumes/YOUR_DISK/MixamoLocal --activate')
+
+
+@app.post('/api/workspace/choose-folder')
+def workspace_choose_folder():
+    # Browser file pickers do not disclose absolute macOS volume paths.
+    # Use the native Finder picker solely to select an ALREADY COPIED folder.
+    # No model migration or filesystem changes happen in this request.
+    if sys.platform != 'darwin':
+        return respond_error('Native folder selection is supported on macOS only.', 501)
+    with STATE_LOCK:
+        active = STATE.get('job')
+        if active and active.get('status') in ('starting', 'running'):
+            return respond_error('Wait for the build to finish before choosing storage.', 409)
+    script = 'POSIX path of (choose folder with prompt "Choose your manually copied MixamoLocal folder on the mounted drive")'
+    try:
+        selected = subprocess.run(['/usr/bin/osascript', '-e', script], capture_output=True,
+                                  text=True, timeout=120, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return respond_error('The Mac folder picker could not be opened.', 503)
+    if selected.returncode != 0:
+        return respond_error('Folder selection cancelled.', 409)
+    folder = Path(selected.stdout.strip()).expanduser()
+    destination = folder if folder.name == 'MixamoLocal' else folder / 'MixamoLocal'
+    from workspace_storage import check_volume
+    try:
+        check_volume(destination)
+    except WorkspaceError as exc:
+        return respond_error(str(exc), 422)
+    return jsonify(path=str(destination))
 
 
 @app.get('/api/release')

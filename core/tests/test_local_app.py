@@ -18,7 +18,14 @@ class FlaskLocalTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
-        os.environ['MIXAMO_FLASK_WORKSPACE'] = str(Path(cls.temp.name) / 'workspace')
+        # Keep this fixture's private workspace override inside its class.
+        # Unittest discovery runs other modules in the same Python process:
+        # leaking this variable makes workspace-adoption tests fail with 409.
+        cls._workspace_env = patch.dict(os.environ, {
+            'MIXAMO_FLASK_WORKSPACE': str(Path(cls.temp.name) / 'workspace')
+        })
+        cls._workspace_env.start()
+        cls.addClassCleanup(cls._workspace_env.stop)
         import flask_app
         cls.mod = flask_app
         cls.client = flask_app.app.test_client()

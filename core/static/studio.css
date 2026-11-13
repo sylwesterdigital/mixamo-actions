@@ -194,3 +194,14 @@
 .texture-opt-options .texture-opt-custom{display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex-basis:100%}
 #textureOptimizeCustom{width:110px;min-width:0;padding:7px 9px;background:#0c1726;color:#f0f6ff;border:1px solid #637c9f;border-radius:6px;font-size:14px}
 #textureOptimizeCustom:focus-visible{outline:2px solid #8caeff;outline-offset:2px}
+
+/* Dedicated storage settings. Long absolute paths wrap without changing the viewport. */
+.workspace-settings-dialog{border:1px solid #526b91;border-radius:12px;background:#162234;color:#e1e9f9;width:min(560px,calc(100vw - 24px));max-height:85vh;overflow:auto;padding:23px;box-shadow:0 18px 70px #0009}
+.workspace-settings-dialog::backdrop{background:#030b17aa}
+.workspace-settings-dialog .workspace-settings-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.workspace-settings-dialog h2{margin:0;font-size:20px}
+.workspace-settings-dialog .field{margin-top:18px;overflow-wrap:anywhere}
+.workspace-settings-dialog .field input{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px}
+.workspace-settings-dialog .hint{font-size:12px;line-height:1.6;margin:10px 0;color:#abbfdc}
+.workspace-settings-actions{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap}
+.workspace-settings-actions .btn{min-height:36px}

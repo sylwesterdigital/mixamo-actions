@@ -1,10 +1,10 @@
 {
-  "version": "1.3.4",
+  "version": "1.3.6",
   "changes": [
-    "Add a **12.5%** texture-resize preset and a custom 1–99.99% field (up to two decimals) to the Local Model Library optimizer.",
-    "Name fractional optimized variants predictably with a safe suffix, e.g. `avatar-o12p5`, `avatar-o37p5`, or `avatar-o33p33`.",
-    "Validate custom values in both Studio and Flask, refusing out-of-range, non-numeric and excessively precise inputs before writing files.",
-    "Preserve original GLBs and all geometry/animation buffers, and continue treating variants as independent managed gallery entries.",
-    "Add fractional-resize and API regression tests without changing the Rantlist backend or shared Ubuntu deployment configuration."
+    "Fix v1.3.5 installer rollback: Flask route tests leaked `MIXAMO_FLASK_WORKSPACE` into later workspace migration tests, incorrectly blocking six activation checks.",
+    "Restore the previous environment after Flask route tests, including when a class fixture fails, so unrelated suites are not affected by the temporary test workspace.",
+    "Isolate manual-workspace test fixtures from external or inherited `MIXAMO_FLASK_WORKSPACE` values while retaining a regression test that intentionally set overrides must still block activation.",
+    "Preserve the v1.3.5 manual-copy external-drive workflow, gallery rebuild, source data, resume manifests, and mounted-drive safety controls unchanged.",
+    "Update the complete versioned release and public homepage metadata without modifying Rantlist, server configuration, or any other hosted application."
   ]
 }
